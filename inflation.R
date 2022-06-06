@@ -8,14 +8,15 @@ library(countrycode)
 library(ggthemes)
 #library(dtwclust)
 library(zoo)
+library(purrr)
+library(broom)
+
 
 #data("uciCT")
 
 #deflation <- read_excel("Inflation-data.xlsx",sheet="def_a")
 
 inflation <- read_excel("Inflation-data.xlsx",sheet="ccpi_a")
-
-gdp = NULL
 
 gdp = read_csv("gdp.csv")%>%
   mutate(region = countrycode(sourcevar = .$LOCATION,
@@ -27,11 +28,21 @@ gdp = read_csv("gdp.csv")%>%
   summarise(value=median(Value,na.rm=T))%>%
   filter(date > as.yearqtr("2006-Q1",format = "%Y-Q%q"))%>%
   group_by(region)%>%
-  mutate(diff = value<lag(value,1))%>%
-  mutate(recession = diff+lag(diff,1)+lag(diff,2) >2 )
+  mutate(rez = value<0)%>%
+  mutate(recession = rez+lag(rez,1) > 1 )
+
+loess = gdp %>% 
+  nest(data = -region) %>% 
+  mutate(
+    test = map(data, ~ loess(.$value~as.numeric(.$date), span = 0.2)), # S3 list-col
+    tidied = map(test, augment,se.fit=T
+    )
+  ) %>% 
+  unnest(tidied,data)
 
 g = ggplot()+
-  geom_line(gdp,mapping=aes(date,value,group=region,color=recession))+
+  geom_line(loess,mapping=aes(date,`.fitted`,group=region,colour=recession),size=1)+
+  #geom_smooth(gdp,mapping=aes(date,value,group=region,colour=recession),span=.2)+
   scale_color_tableau()+
   theme_igray()+
   facet_wrap(~region)
@@ -77,7 +88,7 @@ g = data%>%
     geom_label(x= as.Date("2012",format="%Y"), y = 10,label="European debt crisic")+
     geom_label(x= as.Date("2021",format="%Y"), y = 10,label="Covid-19")+
     geom_hline(yintercept = 2,color="red",size=2)+
-    geom_line(aes(date,value,group=region,color=region),size=1)+
+    geom_smooth(aes(date,value,group=region,color=region),size=1,span=.3)+
     #annotate("rect",xmin=min(data$Year,na.rm=T),xmax=max(data$Year,na.rm=T),ymin=0,ymax=2,fill="grey",alpha=0.6)+
     scale_color_tableau()+
     theme_igray()
