@@ -15,6 +15,8 @@ library(zoo)
 
 inflation <- read_excel("Inflation-data.xlsx",sheet="ccpi_a")
 
+gdp = NULL
+
 gdp = read_csv("gdp.csv")%>%
   mutate(region = countrycode(sourcevar = .$LOCATION,
               origin = "iso3c",
@@ -23,13 +25,18 @@ gdp = read_csv("gdp.csv")%>%
   mutate(date = as.yearqtr(TIME,format = "%Y-Q%q"))%>%
   group_by(region,date)%>%
   summarise(value=median(Value,na.rm=T))%>%
-  filter(date > as.yearqtr("2006-Q1",format = "%Y-Q%q"))
+  filter(date > as.yearqtr("2006-Q1",format = "%Y-Q%q"))%>%
+  group_by(region)%>%
+  mutate(diff = value<lag(value,1))%>%
+  mutate(recession = diff+lag(diff,1)+lag(diff,2) >2 )
 
 g = ggplot()+
-  geom_line(gdp,mapping=aes(date,value,group=region,color=region))+
+  geom_line(gdp,mapping=aes(date,value,group=region,color=recession))+
   scale_color_tableau()+
-  theme_igray()
+  theme_igray()+
+  facet_wrap(~region)
 g
+
 ggsave("gdp.png",width=12,height=12)
 ggplotly(g)
 
