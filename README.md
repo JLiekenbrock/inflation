@@ -35,3 +35,6 @@ https://thedocs.worldbank.org/en/doc/18ad707266f7740bced755498ae0307a-0350012022
 https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
 
 https://api.worldbank.org/v2/en/indicator/NY.GDP.MKTP.CD?downloadformat=excel
+
+### Inflation
+https://www.worldbank.org/en/research/brief/inflation-database#:~:text=The%20World%20Bank%27s%20Prospects%20Group,consumer%20price%20index%20(CPI)%20inflation
