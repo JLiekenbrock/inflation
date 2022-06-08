@@ -3,6 +3,9 @@
 ## Animation in R
 https://plotly.com/ggplot2/animations/
 
+### Racing bar charts
+https://www.r-bloggers.com/2020/01/how-to-create-bar-race-animation-charts-in-r/
+
 ## data sources:
 
 ### outlook worldbank
