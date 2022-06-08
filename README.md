@@ -6,6 +6,8 @@ https://plotly.com/ggplot2/animations/
 ### Racing bar charts
 https://www.r-bloggers.com/2020/01/how-to-create-bar-race-animation-charts-in-r/
 
+https://github.com/amrrs/animated_bar_charts_in_R
+
 ## data sources:
 
 ### outlook worldbank
