@@ -1,5 +1,11 @@
 # inflation
 
+## TODO:
+- Karte (interaktiv) mit Regionen (nach Weltbank) / Weltkarte (Jan)
+- Daten zusammenfügen (china, indien...) (Jan)
+- gdp animation (Dennis)
+- weitere Datenquellen finden (Leo)
+
 ## Animation in R
 https://plotly.com/ggplot2/animations/
 
