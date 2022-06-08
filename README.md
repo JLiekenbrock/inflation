@@ -11,6 +11,7 @@
 - Daten zusammenfügen (china, indien...) (Jan)
 - gdp animation für (top10)/region nach gdp(Dennis)
 - weitere Datenquellen finden (Leo)
+- Korrelationen betrachten
 
 ## weitere Ziele:
 - Regressionsmodell
