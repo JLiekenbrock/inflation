@@ -25,21 +25,13 @@ gdp = gdp%>%
                               destination = "iso3c"))%>%
   filter(!is.na(country))
   
-countrylist = gdp%>%filter(TIME == max(TIME,na.rm=T))%>%
+countrylist = gdp%>%filter(TIME == 2019)%>%
   slice_max(n=10,order_by=Value)%>%
   pull(LOCATION)
 
-gdp%>%
-  filter LOCATION %in% 
-      filter(
-        TIME == max(TIME,na.rm=T))%>%
-        slice_max(n=10,order_by=Value)%>%
-        pull(LOCATION)
-    )
-  )
+countrylist
+gdp = gdp%>%
+  filter( LOCATION %in% countrylist  )
 
-
-gdp%>%
-  filter()
 
 
