@@ -1,7 +1,7 @@
 # inflation
 
 ## TODO:
-- Karte (interaktiv) mit Regionen (nach Weltbank) / Weltkarte (Jan)
+- Karte (interaktiv) mit Regionen (nach Weltbank) / Weltkarte (Jan) (Bsp region ändern)
 - Daten zusammenfügen (china, indien...) (Jan)
 - gdp animation (Dennis)
 - weitere Datenquellen finden (Leo)
