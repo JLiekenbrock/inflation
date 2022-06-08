@@ -1,5 +1,11 @@
 # inflation
 
+## Datenlage (idealerweise von Weltbank)
+- Inflation (sehr gut) (monatlich)
+- GDP (in Arbeit) (jährlich)
+- Arbeitslosigkeitsrate
+- M1/M2 Geldmenge
+
 ## TODO:
 - Karte (interaktiv) mit Regionen (nach Weltbank) / Weltkarte (Jan) (Bsp region ändern)
 - Daten zusammenfügen (china, indien...) (Jan)
