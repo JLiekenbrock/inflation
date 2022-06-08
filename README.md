@@ -1,5 +1,8 @@
 # inflation
 
+## Animation in R
+https://plotly.com/ggplot2/animations/
+
 ## data sources:
 
 ### outlook worldbank
