@@ -3,8 +3,11 @@
 ## TODO:
 - Karte (interaktiv) mit Regionen (nach Weltbank) / Weltkarte (Jan) (Bsp region ändern)
 - Daten zusammenfügen (china, indien...) (Jan)
-- gdp animation (Dennis)
+- gdp animation für (top10)/region nach gdp(Dennis)
 - weitere Datenquellen finden (Leo)
+
+## weitere Ziele:
+- Regressionsmodell
 
 ## Animation in R
 https://plotly.com/ggplot2/animations/
