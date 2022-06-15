@@ -3,7 +3,7 @@
 ## Feedback 15.06.
 
 Zusammenhang zwischen (zwei) Variablen animieren, ala Gapminder, evtl. auch in Shiny
-
+- partial least squares (Leo)
 
 
 ## Datenlage (idealerweise von Weltbank)
