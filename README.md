@@ -1,5 +1,11 @@
 # inflation
 
+## Feedback 15.06.
+
+Zusammenhang zwischen (zwei) Variablen animieren, ala Gapminder, evtl. auch in Shiny
+
+
+
 ## Datenlage (idealerweise von Weltbank)
 - Inflation (sehr gut) (monatlich)
 - GDP (in Arbeit) (jährlich)
