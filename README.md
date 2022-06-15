@@ -4,7 +4,8 @@
 
 Zusammenhang zwischen (zwei) Variablen animieren, ala Gapminder, evtl. auch in Shiny
 - partial least squares (Leo)
-
+- Merkmale auswählen
+- neuer Tab zwei Merkmale gegeneinander darstellen
 
 ## Datenlage (idealerweise von Weltbank)
 - Inflation (sehr gut) (monatlich)
