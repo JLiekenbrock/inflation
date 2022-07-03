@@ -16,6 +16,11 @@ library("sf")
 library("rnaturalearth")
 library("rnaturalearthdata")
 library(tidyverse)
+library(countrycode)
+
+library(broom)
+library(purrr)
+
 
 ```
 
@@ -67,4 +72,56 @@ tm_shape(vars) +
     tm_facets(by = "Indicator",free.scales=TRUE)
 
 
+```
+
+
+```{r}
+#source("inflationdata.R")
+load("inflationdata.RData")
+
+data = data%>%
+  mutate(date=as.POSIXct(date))%>%
+  mutate(region = countrycode(sourcevar = data$region,
+                        origin = "iso3n",
+                         destination = "region")
+  )%>%
+  drop_na()%>%
+  group_by(region,`Series Name`,date)%>%
+  summarise(value=median(value,na.rm=T))%>%
+  drop_na()%>%
+  mutate(series = `Series Name`)%>%
+  nest(data = -c(region,series))%>% 
+  mutate(
+    test = map(data, ~ loess(.$value~as.numeric(.$date), span = .5)), # S3 list-col
+    tidied = map(test, augment,se.fit=T
+    )
+  )%>% 
+  unnest(c(tidied,data))%>%
+  select(-test)%>%
+  data.frame()%>%
+  mutate(smooth = `.fitted`)
+
+alt$data_transformers$disable_max_rows()
+
+
+selection = alt$selection_multi(fields=list("region"), bind='legend')
+
+chart <-
+  alt$Chart(data)$
+  encode(
+    x = "date:T",
+    y = "smooth:Q",
+    color="region:N",
+    tooltip='date:T',
+    opacity=alt$condition(selection, alt$value(1), alt$value(0.2))
+  )$
+  mark_line()$
+  facet('series',columns=2)$
+  interactive()$
+    add_selection(
+    selection
+  )
+
+chart
+  
 ```
