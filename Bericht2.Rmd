@@ -6,10 +6,11 @@ output:
   html_document:
     toc: true
     number_sections: true
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message= FALSE, warning= FALSE)
+knitr::opts_chunk$set(echo = TRUE, message= FALSE, warning= FALSE)
 library(altair)
 library(reticulate)
 #reticulate::py_config()
@@ -122,7 +123,7 @@ data = data%>%
   group_by(region,`Series Name`,date)%>%
   summarise(value=median(value,na.rm=T))%>%
   drop_na()%>%
-  mutate(series = `Series Name`)%>%
+  mutate(series = word(`Series Name`,1,-2))%>%
   nest(data = -c(region,series))%>% 
   mutate(
     test = map(data, ~ loess(.$value~as.numeric(.$date), span = .5)), # S3 list-col
@@ -167,5 +168,86 @@ rule = alt$Chart(
 all = alt$layer(chart,rule,data=data)$facet('series',columns=2,title="Yearly Inflation Rates by Month by Index and Worldbank-Regions")
 
 all
+
+```
+
+## Inflation Heatmap
+
+```{r}
+
+m = data%>%
+  select(region,series,value,date)%>%
+  pivot_wider(id_cols=c(date,region),names_from=series,values_from=value)
+
+korr = m%>%
+  select(-date)%>%
+  nest(data=-c(region))%>%
+  mutate(korr = map(data,cor),
+        tidied = map(korr, tidy))%>%
+  unnest(tidied)
+
+rownames(korr$x)
+
+t = data.frame(
+  series = rep(data$series%>%unique,data$region%>%unique%>%length),
+  region = korr$region,
+  corr = korr$x
+)
+colnames(t)[3:6]=data$series%>%unique
+colnames(t)
+
+t_long=t%>%
+  pivot_longer(!c(series,region))
+
+
+alt$Chart(t_long)$mark_rect()$encode(
+    x='series:N',
+    y='name:N',
+    color='value:Q',
+    tooltip = list("series:N","name:N","value:Q")
+)$facet("region:N",columns=3)
+
+
+```
+
+
+```{r}
+
+m = data%>%
+  select(region,series,value,date)%>%
+  mutate(region2=region)%>%
+  mutate(region=series,series=region2)%>%
+  pivot_wider(id_cols=c(date,region),names_from=series,values_from=value)
+
+korr = m%>%
+  select(-date)%>%
+  nest(data=-c(region))%>%
+  mutate(korr = map(data,cor),
+        tidied = map(korr, tidy))%>%
+  unnest(tidied)
+
+rownames(korr$x)
+
+d = data%>%
+  mutate(region2=region)%>%
+  mutate(region=series,series=region2)
+
+t = data.frame(
+  series = rep(d$series%>%unique,d$region%>%unique%>%length),
+  region = korr$region,
+  corr = korr$x
+)
+colnames(t)[3:9]=d$series%>%unique
+
+t_long=t%>%
+  pivot_longer(!c(series,region))
+
+alt$Chart(t_long)$mark_rect()$encode(
+    x='series:N',
+    alt$Y('name:N', axis=alt$Axis(ticks=FALSE, domain=FALSE)),
+    color='value:Q',
+    tooltip = list("series:N","name:N","value:Q")
+)$facet("region:N",columns=2)
+
 
 ```
