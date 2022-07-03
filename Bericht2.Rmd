@@ -53,9 +53,7 @@ tmap_mode("view")
 
 currentdata = worldbank_data%>%
   filter(!is.na(Values))%>%
-  group_by(Indicator,iso2c)%>%
-  filter(year == max(year))%>%
-  ungroup()%>%
+  filter(year == 2020)%>%
   mutate(iso_a3 = 
            countrycode(sourcevar = .$iso2c,
                         origin = "iso2c",
