@@ -1,12 +1,15 @@
 ---
-title: "Untitled"
+title: "Financial Study of Worldbank since 2007"
 author: "Jan Liekenbrock"
 date: '2022-07-02'
-output: html_document
+output: 
+  html_document:
+    toc: true
+    number_sections: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE, message= FALSE, warning= FALSE)
 library(altair)
 library(reticulate)
 #reticulate::py_config()
@@ -17,17 +20,30 @@ library("rnaturalearth")
 library("rnaturalearthdata")
 library(tidyverse)
 library(countrycode)
+library(plotly)
 
 library(broom)
 library(purrr)
 
-
-```
-
-```{r}
 library(ggthemes)
 library(tmap)
 library(countrycode)
+
+alt$data_transformers$disable_max_rows()
+
+
+```
+
+## Introduction
+
+In this study we will analyse economical Data of the Worldbank...
+
+## Region Mapping
+
+To simplify the Data we will aggregate it by regions as defined by the worldbank, please see the map below...
+
+```{r map}
+
 
 pal = tableau_color_pal(
   palette = "Tableau 10")(10)
@@ -44,14 +60,28 @@ World$wb=countrycode(sourcevar = World$iso_a3,
 World = World%>%
   filter(!is.na(wb))
 
-tmap_mode("plot")
+ggplot(data = World) +
+    geom_sf(aes(fill=wb),color="white",size=.1)+
+    theme(legend.position = "none",x.axis.text="none")+
+    scale_fill_tableau()+
+    theme_igray() 
 
-tm_shape(World) +
-    tm_polygons("wb",palette=pal)
+# tmap_mode("plot")
+# 
+# tm_shape(World) +
+#     tm_polygons("wb",palette=pal)
 
 ```
 
-```{r}
+## Racing Bar Chart 
+
+In this section there is an animated graph
+
+## Worldbank Indicators
+
+Now we will have a look at selected Indicators
+
+```{r multimap}
 load("worldbankindicators.RData") 
 
 tmap_mode("view")
@@ -74,6 +104,9 @@ tm_shape(vars) +
 
 ```
 
+## Inflation in Detail
+
+Now we will have a look at Inflation in further Detail.
 
 ```{r}
 #source("inflationdata.R")
@@ -99,29 +132,40 @@ data = data%>%
   unnest(c(tidied,data))%>%
   select(-test)%>%
   data.frame()%>%
-  mutate(smooth = `.fitted`)
+  mutate(smooth = `.fitted`)%>%
+  mutate(ref=2)%>%
+  mutate(crisis=ifelse(
+    date > as.POSIXct(as.Date("2008-10-19 10:15")) & date < as.POSIXct(as.Date("2010-10-19 10:15")), 1, 0))
 
-alt$data_transformers$disable_max_rows()
-
-
-selection = alt$selection_multi(fields=list("region"), bind='legend')
+selection = alt$selection_single(fields=list("region"), bind='legend')
 
 chart <-
-  alt$Chart(data)$
+  alt$Chart()$
   encode(
-    x = "date:T",
-    y = "smooth:Q",
+    x=alt$X('date:T', axis=alt$Axis(title='Time')),
+    #x = "date:T",
+    #y = "smooth:Q",
+    strokeWidth=alt$value(2),
+    y=alt$Y('smooth:Q', axis=alt$Axis(title='Annual Inflation Rate')),
     color="region:N",
-    tooltip='date:T',
+    tooltip=list('region:N','date:T'),
     opacity=alt$condition(selection, alt$value(1), alt$value(0.2))
   )$
   mark_line()$
-  facet('series',columns=2)$
   interactive()$
     add_selection(
     selection
   )
 
-chart
-  
+
+rule = alt$Chart(
+)$mark_rule(color='red')$encode(
+    y='ref:Q',
+    strokeWidth=alt$value(2)
+)
+
+all = alt$layer(chart,rule,data=data)$facet('series',columns=2,title="Yearly Inflation Rates by Month by Index and Worldbank-Regions")
+
+all
+
 ```
