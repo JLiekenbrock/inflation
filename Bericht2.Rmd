@@ -107,6 +107,16 @@ tm_shape(vars) +
 
 ## Inflation in Detail
 
+## Headline inflation
+
+Headline inflation is the raw inflation figure reported through the Consumer Price Index (CPI) that is released monthly by the Bureau of Labor Statistics (BLS). The CPI calculates the cost to purchase a fixed basket of goods to determine how much inflation is occurring in the broad economy. The CPI uses a base year and indexes the current year's prices, according to the base year's values.
+
+## Core Inflation
+
+Core inflation removes the CPI components that can exhibit large amounts of volatility from month to month, which can cause unwanted distortion to the headline figure. The most commonly removed factors are those relating to the costs of food and energy. Food prices can be affected by factors outside of those attributed to the economy, such as environmental shifts that cause issues in the growth of crops. Energy costs, such as oil production, can be affected by forces outside of traditional supply and demand, such as political dissent.
+
+
+
 Now we will have a look at Inflation in further Detail.
 
 ```{r}
@@ -186,7 +196,6 @@ korr = m%>%
         tidied = map(korr, tidy))%>%
   unnest(tidied)
 
-rownames(korr$x)
 
 t = data.frame(
   series = rep(data$series%>%unique,data$region%>%unique%>%length),
@@ -194,7 +203,6 @@ t = data.frame(
   corr = korr$x
 )
 colnames(t)[3:6]=data$series%>%unique
-colnames(t)
 
 t_long=t%>%
   pivot_longer(!c(series,region))
@@ -226,7 +234,6 @@ korr = m%>%
         tidied = map(korr, tidy))%>%
   unnest(tidied)
 
-rownames(korr$x)
 
 d = data%>%
   mutate(region2=region)%>%
