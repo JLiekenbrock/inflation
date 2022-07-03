@@ -1,0 +1,70 @@
+---
+title: "Untitled"
+author: "Jan Liekenbrock"
+date: '2022-07-02'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(altair)
+library(reticulate)
+#reticulate::py_config()
+#altair::check_altair()
+#altair::install_altair()
+library("sf")
+library("rnaturalearth")
+library("rnaturalearthdata")
+library(tidyverse)
+
+```
+
+```{r}
+library(ggthemes)
+library(tmap)
+library(countrycode)
+
+pal = tableau_color_pal(
+  palette = "Tableau 10")(10)
+
+data("World")
+
+World = World%>%
+  filter(continent!="Antarctica")
+
+World$wb=countrycode(sourcevar = World$iso_a3,
+                        origin = "iso3c",
+                         destination = "region")
+
+World = World%>%
+  filter(!is.na(wb))
+
+tmap_mode("view")
+
+tm_shape(World) +
+    tm_polygons("wb",palette=pal)
+
+```
+
+```{r}
+load("worldbankindicators.RData") 
+
+currentdata = worldbank_data%>%
+  filter(!is.na(Values))%>%
+  group_by(Indicator,iso2c)%>%
+  filter(year == max(year))%>%
+  ungroup()%>%
+  mutate(iso_a3 = 
+           countrycode(sourcevar = .$iso2c,
+                        origin = "iso2c",
+                         destination = "iso3c"))%>%
+  filter(!is.na(iso_a3))
+  
+vars = World%>%left_join(currentdata)
+
+tm_shape(vars) +
+    tm_polygons("Values")+
+    tm_facets(by = "Indicator",free.scales=TRUE)
+
+
+```
