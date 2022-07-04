@@ -83,7 +83,7 @@ In this section there is an animated graph
 Now we will have a look at selected Indicators
 
 ```{r multimap}
-load("worldbankindicators.RData") 
+load("worldbankindicators.RData")
 
 tmap_mode("view")
 
@@ -97,6 +97,11 @@ currentdata = worldbank_data%>%
   filter(!is.na(iso_a3))
   
 vars = World%>%left_join(currentdata)
+
+ggplot(vars)+
+  geom_sf(mapping=aes(fill=Values))+
+  facet_wrap(~Indicator)
+
 
 tm_shape(vars) +
     tm_polygons("Values")+
