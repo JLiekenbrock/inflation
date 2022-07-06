@@ -43,7 +43,9 @@ In this study we will analyse economical Data of the Worldbank...
 
 To simplify the Data we will aggregate it by regions as defined by the worldbank, please see the map below...
 
-```{r map}
+```{r map,fig.width=12}
+
+library(tmap)
 
 
 pal = tableau_color_pal(
@@ -61,11 +63,16 @@ World$wb=countrycode(sourcevar = World$iso_a3,
 World = World%>%
   filter(!is.na(wb))
 
-ggplot(data = World) +
-    geom_sf(aes(fill=wb),color="white",size=.1)+
-    theme(legend.position = "none",x.axis.text="none")+
-    scale_fill_tableau()+
-    theme_igray() 
+tmap_mode("view")
+
+tm_shape(World) +
+    tm_polygons("wb",palette=pal)
+# 
+# ggplot(data = World) +
+#     geom_sf(aes(fill=wb),color="white",size=.1)+
+#     theme(legend.position = "none",x.axis.text="none")+
+#     scale_fill_tableau()+
+#     theme_igray() 
 
 # tmap_mode("plot")
 # 
@@ -73,19 +80,304 @@ ggplot(data = World) +
 #     tm_polygons("wb",palette=pal)
 
 ```
-
 ## Racing Bar Chart 
 
-In this section there is an animated graph
+```{r eval = FALSE, include=TRUE}
 
-## Worldbank Indicators
+library(WDI)
+library(dplyr)
+library(tidyr)
+library(sf)
+library(rnaturalearth)
+library(janitor)
+library(ggplot2)
+library(gganimate)
+library(gifski)
+library(ggimage)
+library(av)
+library(ggthemes)
 
-Now we will have a look at selected Indicators
+start_year <- 1960
+end_year <- 2021
+worldbank_data = WDI("NY.GDP.MKTP.CD",  country = "all" ,start=start_year,end=end_year)
 
-```{r multimap}
+worldbank_data=worldbank_data%>%
+  rename(gdp = `NY.GDP.MKTP.CD`)
+
+world_regions <- ne_countries(scale = "medium", returnclass = "sf")%>%
+  filter(sovereignt!="Antarctica")
+
+gdp_ready <- worldbank_data%>%
+  left_join(st_drop_geometry(world_regions[c("iso_a2","region_wb")]),by=c("iso2c"="iso_a2"))%>%
+  rename(Region = region_wb)%>%
+  drop_na()
+
+rank_top <- 20
+
+# Arrange the ranking
+gdp_set <- gdp_ready %>%
+  group_by(year) %>%
+  mutate(rank = rank(-gdp),
+         gdp_rel = gdp/gdp[rank==1],
+         gdp_lbl = paste0(" ",round(gdp/1e9))) %>%
+  group_by(country) %>%
+  filter(rank <= rank_top) %>%
+  ungroup()
+
+gdp_set_2019 <- gdp_set %>%
+  filter(year == 2019)
+
+# Building the static plot
+static_plot <- ggplot(gdp_set, aes(rank, group = country)) +  
+  scale_fill_tableau(guide = guide_legend(title.theme = element_text(size = 30),
+                                          label.theme = element_text(size = 25))) +
+  geom_tile(aes(y = gdp/2,
+                height = gdp, fill = Region,
+                width = 0.9), alpha = 0.8, color = NA) +
+  geom_text(aes(y = -2e12, label = paste(country)), vjust = 0.2, hjust = 1, size=7) +
+  geom_flag(aes(y=-7e11, image = iso2c)) + 
+  geom_text(aes(y=gdp,label = gdp_lbl, hjust=0), size=8) +
+  geom_text(aes(x=rank_top, y=max(gdp) , label = as.factor(year)), vjust = 0.2, alpha = 0.5,  col = "gray", size = 20) +
+  coord_flip(clip = "off", expand = FALSE) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_reverse() +
+  theme(axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),
+        panel.border=element_blank(),
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major.x = element_line( size=.1, color="grey" ),
+        panel.grid.minor.x = element_line( size=.1, color="grey" ),
+        plot.title=element_text(size=25, hjust=0, face="bold", colour="black", vjust=-1),
+        plot.subtitle=element_text(size=18, hjust=1, face="italic", color="grey"),
+        plot.caption =element_text(size=14, hjust=1, face="italic", color="grey"),
+        plot.background=element_blank(),
+        plot.margin = margin(2, 2, 2, 8, "cm"))
+
+#static_plot
+
+# Animating the static plot
+animated <- static_plot + 
+  transition_states(year, transition_length = 3, state_length = 0, wrap = FALSE) +
+  view_follow(fixed_x = TRUE) +
+  ease_aes('linear')+
+  enter_fade()+
+  exit_fade() +
+  labs(title = paste("Top",toString(rank_top),"World GDP,",toString(start_year),"-",toString(end_year)),  
+       subtitle  =  "GDP in Billions USD (constant 2010)",
+       caption  = "Data Source: World Bank Data")
+
+## Render the animated chart to mp4 and save
+anim_save(
+  filename = "gdp_barchart_race.mp4", 
+  animation = animate(animated, 600,
+                      fps = 20,
+                      width = 1500,
+                      height = 1000,
+                      renderer = av_renderer()
+                      )
+)
+
+```
+
+In this section, there is an animated graph of top-20 countries by GDP from 1960 to 2021. The GDP data are imported from worldbank using API from WDI library. The chart is plotted using ggplot, animated using gganimate and saved to mp4 using av.
+
+<iframe width="720" height="480" src="gdp_barchart_race.mp4" align="middle" frameborder="0" sandbox></iframe>
+
+## Relationship between selected Worllbank Indicators
+
+```{r code, eval = FALSE}
+library(altair)
+library(reticulate)
+#reticulate::py_config()
+#altair::check_altair()
+#altair::install_altair()
+library("sf")
+library("rnaturalearth")
+library("rnaturalearthdata")
+library(tidyverse)
+library(countrycode)
+library(plotly)
+
+library(broom)
+library(purrr)
+
+library(ggthemes)
+library(tmap)
+library(countrycode)
+
+data("World")
 load("worldbankindicators.RData")
 
-tmap_mode("view")
+
+
+World$iso2c=countrycode(sourcevar = World$iso_a3,
+                        origin = "iso3c",
+                        destination = "iso2c")
+
+averaged_data <- worldbank_data%>%
+  group_by(iso2c, country, Indicator)%>%
+  summarise(Values=mean(Values,na.rm=T))
+
+current_data <- worldbank_data %>% 
+  filter(year==2000)
+
+joined_data <- World%>%left_join(current_data, by='iso2c')
+
+inflation <- filter(joined_data, Indicator=='Inflation')
+unemployment <- filter(joined_data, Indicator =='Unemployment')
+
+# life expectancy vs GDP per capita for every Country
+joined_data %>% 
+  filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
+  ggplot(aes(x = (gdp_cap_est), 
+             y = (life_exp),
+             size= pop_est,
+             )) +
+  geom_point(alpha=0.1)+
+  xlim(0,90000) +
+  geom_smooth(se=F)+
+  #facet_wrap(~continent)+
+  labs(title='Life expectancy explained by GDP',
+       x = 'GDP per capita',
+       y = 'Life expectancy',
+       colour = 'continent')
+
+# life expectancy vs GDP per capita for each continent
+joined_data %>% 
+  filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
+  ggplot(aes(x = (gdp_cap_est), 
+             y = (life_exp),
+             size= pop_est,
+             color=continent
+  )) +
+  geom_point(alpha = 0.1)+
+  xlim(0,65000) +
+  geom_smooth(method=lm, se=F)+
+  facet_wrap(~continent)+
+  labs(title='Life expectancy and GDP per capita',
+       x = 'GDP per capita',
+       y = 'Life expectancy',
+       colour = 'continent')
+
+
+# Happiness vs GDP per capita for each continent
+joined_data %>% 
+  filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
+  ggplot(aes(x = log(gdp_cap_est), 
+             y = HPI,
+             size= pop_est,
+             color=continent
+  )) +
+  geom_point(alpha = 0.1)+
+  facet_wrap(~continent)+
+  labs(title='Happiness and GDP per capita',
+       x = 'log (GDP per capita)',
+       y = 'Happiness Index',
+       colour = 'continent')
+
+
+# Happiness vs Inequality for all countries
+joined_data %>% 
+  filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
+  ggplot(aes(x = inequality, 
+             y = HPI,
+             size= pop_est,
+             color=pop_est_dens
+  )) +
+  geom_point(alpha = 0.1)+
+  geom_smooth(method=lm, se=F)+
+  labs(title='Happiness and Inequality',
+       x = 'Inequality',
+       y = 'Happiness Index')
+
+# Life Expectancy And Happiness
+joined_data %>% 
+  filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
+  ggplot(aes(x = life_exp, 
+             y = HPI,
+             size= pop_est,
+             color=pop_est_dens
+  )) +
+  geom_point(alpha = 0.1)+
+  geom_smooth(method=lm, se=F)+
+  labs(title='Happiness and Life Expectancy',
+       x = 'Life Expectancy',
+       y = 'Happiness Index')
+
+# plotting inflation of year 2020
+ggplot(data = inflation) +
+  geom_sf(aes(fill=Values)) +
+  colorspace::scale_fill_continuous_sequential(palette='viridis') +
+  labs(caption= 'Inflation Map 2020')
+
+# reshape long to wide 
+columns <- c('iso_a3', 'country', 'Indicator', 'Values', 'continent')
+filtered <- joined_data[columns] %>% 
+  st_drop_geometry()
+
+# filtered %>% 
+#   mutate(Indicator = as.factor(Indicator))
+
+wide_data <- filtered %>% 
+  pivot_wider(names_from = Indicator, values_from = Values) 
+
+# inflation vs interest rate
+wide_data %>% 
+  ggplot(aes(y = log(Inflation), 
+             x = `Interest Rate`,
+             size= GDP,
+  )) +
+  geom_point(alpha=0.3)+
+  geom_smooth(method=lm, se=F)+
+  #facet_wrap(~continent)+
+  labs(title='Inflation and Interest rate',
+       x = 'log(Inflation)',
+       y = 'Interest Rate')
+
+# inflation vs unemployment?
+western <- wide_data %>% 
+  filter(continent == 'Europe' | continent =='North America')
+
+western %>% 
+  ggplot(aes(x = (Unemployment), 
+             y = (Inflation),
+             size= Population,
+  )) +
+  geom_point(alpha=0.3)+
+  geom_smooth(method=lm, se=F)+
+  #facet_wrap(~continent)+
+  labs(title='Inflation and unemployment',
+       x = 'Unemployment rate',
+       y = 'Inflation')
+
+```
+
+![](https://raw.githubusercontent.com/Lsacy/inflation/main/life_exp_gdp.png)
+
+![](https://raw.githubusercontent.com/Lsacy/inflation/main/life_exp_gdp2.png)
+
+![](https://raw.githubusercontent.com/Lsacy/inflation/main/hdi_gdp.png)
+
+![](https://raw.githubusercontent.com/Lsacy/inflation/main/hdi_inequality.png)
+
+![](https://raw.githubusercontent.com/Lsacy/inflation/main/hdi_life_exp.png)
+
+![](https://raw.githubusercontent.com/Lsacy/inflation/main/inflation_map.png)
+
+![](https://raw.githubusercontent.com/Lsacy/inflation/main/inflation_interest.png)
+
+![](https://raw.githubusercontent.com/Lsacy/inflation/main/inflation_unemployment.png)
+
+```{r multimap, eval =FALSE, include = FALSE}
+load("worldbankindicators.RData")
+
+tmap_mode("plot")
 
 currentdata = worldbank_data%>%
   filter(!is.na(Values))%>%
@@ -177,7 +469,7 @@ chart <-
 rule = alt$Chart(
 )$mark_rule(color='red')$encode(
     y='ref:Q',
-    strokeWidth=alt$value(2)
+    strokeWidth=alt$value(5)
 )
 
 all = alt$layer(chart,rule,data=data)$facet('series',columns=2,title="Yearly Inflation Rates by Month by Index and Worldbank-Regions")
@@ -188,7 +480,7 @@ all
 
 ## Inflation Heatmap
 
-```{r}
+```{r, fig.width=12}
 
 m = data%>%
   select(region,series,value,date)%>%
@@ -197,7 +489,7 @@ m = data%>%
 korr = m%>%
   select(-date)%>%
   nest(data=-c(region))%>%
-  mutate(korr = map(data,cor),
+  mutate(korr = map(data,cor,use="pairwise.complete.obs"),
         tidied = map(korr, tidy))%>%
   unnest(tidied)
 
@@ -218,13 +510,13 @@ alt$Chart(t_long)$mark_rect()$encode(
     y='name:N',
     color='value:Q',
     tooltip = list("series:N","name:N","value:Q")
-)$facet("region:N",columns=3)
+)$properties(width=200,height=200)$facet("region:N",columns=4)
 
 
 ```
+`
 
-
-```{r}
+```{r, fig.width=12}
 
 m = data%>%
   select(region,series,value,date)%>%
@@ -235,7 +527,7 @@ m = data%>%
 korr = m%>%
   select(-date)%>%
   nest(data=-c(region))%>%
-  mutate(korr = map(data,cor),
+  mutate(korr = map(data,cor,use="pairwise.complete.obs"),
         tidied = map(korr, tidy))%>%
   unnest(tidied)
 
@@ -259,7 +551,7 @@ alt$Chart(t_long)$mark_rect()$encode(
     alt$Y('name:N', axis=alt$Axis(ticks=FALSE, domain=FALSE)),
     color='value:Q',
     tooltip = list("series:N","name:N","value:Q")
-)$facet("region:N",columns=2)
+)$properties(width=300,height=300)$facet("region:N",columns=2)
 
 
 ```
