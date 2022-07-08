@@ -1,0 +1,247 @@
+---
+title: "finetuning a visualization"
+author: "Jan Liekenbrock"
+date: '2022-07-07'
+output: 
+  html_document:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE,warning=FALSE)
+library(ggthemes)
+library(tidyverse)
+library(tmap)
+library(countrycode)
+library(tidyverse)
+library(readxl)
+library(broom)
+library(purrr)
+
+library(altair)
+alt$data_transformers$disable_max_rows()
+```
+
+In the following i will describe my visualisation and finetuning process.
+
+## Process steps
+
+### Finding Data
+
+#### Finding a topic
+The first step was finding an intereisting topic. Our group was united in that we wanted to look at data which is currently relevant. Because of the war in Ukraine (and other factors) inflation is a current topic. 
+I knew almost nothing about it so far, so i decided to dig in deeper.
+
+#### Finding and narrowing down the data
+
+I was happy to find the Worldbanks global database of inflation.
+[https://www.worldbank.org/en/research/brief/inflation-database]
+I first choose variables i wanted to look into and ended up going for "Headline consumer price index (CPI) inflation",
+"Food CPI inflation",
+"Energy CPI inflation",
+"Core CPI inflation". This means i excluded the "Producer price index inflation" and "Gross domestic product deflator". I did so to have a narrower topic which in this case is Consumer Price Inflation.
+To narrow it done further by focusing on the time-span since the last financial crisis.
+
+### Visualisation Process
+
+The data i chose at this point consists of timeseries on country level. This is still to broad to make meaningful visualisation,
+so i had to either group the countries into regions or choose representative countries. Because the second seems much harder to me,
+i decided to use a regional mapping.
+
+#### Choosing a color palette
+
+As explained above i decided to look into regional groups of countries. Because with my visualisation i want to be able to compare regions I was already sure at this point, that the plots should be colored by regions, which is a categorical variable. 
+
+An obvious choice using R would be rcolorbrewer, however i think that tableau10 is an excellent colorpalette for categorical values as it has more pleasant to look at colors than rcolorbrewer.
+
+```{r}
+library(RColorBrewer)
+library("gridExtra")
+
+dark2 = brewer.pal(name="Dark2",n=8)
+tableau10 = tableau_color_pal(palette = "Tableau 10")(10)
+
+g1 = ggplot()+
+  geom_raster(mapping=aes(1,1:10,fill=tableau10),show.legend = FALSE)+
+  scale_y_reverse()+
+  scale_fill_manual(values=tableau10)+
+  ggtitle("tableau10")
+
+g2 = ggplot()+
+  geom_raster(mapping=aes(1,1:8,fill=dark2),show.legend = FALSE)+
+  scale_y_reverse()+
+  scale_fill_manual(values=dark2)+
+  ggtitle("brewer:dark2")
+
+grid.arrange(g1,g2,ncol=2)
+```
+
+#### Choosing the country grouping
+
+To be able to plot i had to choose a regional mapping.
+Commonly used country groups are the UNs grouping, there are regions as well as subregions defined, however the regions are only grouped into five which is too coarse in my opinion whereas the subregions are 17 groups, which is too narrow.
+Because we have economical data at hand, i decided to use the grouping which is defined by the worldbank (which the data comes from as well).
+A very convenient way to convert between regional codes/mapping is to use the r-package "countrycode".
+
+Here we have a first plot, to see what grouping will be used.
+
+```{r, fig.cap= "regional groups using decided tableau10 scale"}
+
+
+tmap_mode("view")
+
+pal = tableau_color_pal(
+  palette = "Tableau 10")(10)
+
+data("World")
+
+World = World%>%
+  filter(continent!="Antarctica")
+
+World$wb=countrycode(sourcevar = World$iso_a3,
+                        origin = "iso3c",
+                         destination = "region")
+
+World = World%>%
+  filter(!is.na(wb))
+
+tm_shape(World) +
+  tm_polygons("wb",palette = pal)
+
+
+```
+
+#### Prototyping the plot with ggplot
+
+The timeseries data can now be grouped by regions. The data contains the timeseries by month, quarter and year.
+I decided to use the monthly data as it is the most fine grained dataset. 
+The timeseries by country only contain the Inflation indices by country, to make the countries comparable i decided to calculate the inflation rates by country.
+
+Because i have now timeseries of four inflation types by regions i was certain i want to do a small multiples plot.
+Since i'm fluent in ggplot i usually use it for getting a first look at data.
+
+```{r preparing data}
+
+sheets = c("hcpi_m","fcpi_m","ecpi_m","ccpi_m")
+
+# Loading the data
+data = sheets%>%
+  set_names()%>% 
+  map(read_excel, path = "Inflation-data.xlsx")%>%
+  bind_rows()%>%
+  pivot_longer(!c(1:5),names_to="Year",values_to="value")
+
+# converting date
+data = data%>%
+  mutate(date=as.POSIXct(paste0(Year,28),format="%Y%m%d"))%>%
+  filter(date>=as.POSIXct("20060101",format="%Y%m%d"))
+
+# calculating inflation rates
+data = data%>%
+  group_by(`Country Code`,`Series Name`)%>%
+  mutate(value = (value/lag(value,12)-1)*100)%>%
+  ungroup()
+
+# applying regional mapping
+data$region=countrycode(sourcevar = data$`Country Code`,
+                        origin = "wb",
+                         destination = "region")
+
+# grouping by regions
+data = data%>%
+  drop_na()%>%
+  group_by(region,`Series Name`,date)%>%
+  summarise(value=median(value,na.rm=T))
+
+```
+```{r}
+ggplot()+
+  geom_line(data,mapping=aes(date,value,group=region,color=region))+
+    facet_wrap(~`Series Name`)+
+    scale_colour_tableau()
+```
+
+This is not bad as a first plot, however the data is very noisy, which makes it much harder to read the plot.
+Therefore one should use smoothing which is very easy with ggplot, it's function geom_smooth will use loess regression for smoothing by default. To not smooth to strongly, i set the smoothing span to a low value.
+
+
+```{r}
+ggplot()+
+  geom_smooth(data,mapping=aes(date,value,group=region,color=region),span=.2)+
+    facet_wrap(~`Series Name`)+
+    scale_colour_tableau()
+```
+By default ggplot also shows the confidence intervals for the loess regression, from this one can see, that the confidence interval is mostly small, which is good. For further presentation i will remove the ci's because, it ones again makes the plot harder to read. At this point it would also be nice to add interaction.
+
+```{r}
+library(plotly)
+g = ggplot()+
+  geom_smooth(data,mapping=aes(date,value,group=region,color=region),span=.2, se=FALSE)+
+    facet_wrap(~`Series Name`)+
+    scale_colour_tableau()
+
+ggplotly(g)
+```
+
+#### Creating the final version of the plot with altair
+
+The plot above is going into the direction of what i had in mind however i really dislike the overall look of ggplot+plotly, so there would be a lot i would want to improve, so i will just switch out the plot-library to altair now. 
+Altair also supports smoothing with LOESS regression, however it does not properly work with dates, therefor i had to do this by hand before plotting. For further guidance in the plot i also added a horizontal line at two percent inflation rate, which is considered to be the a good amount of inflation by economist.
+
+
+```{r smoothing}
+
+data = data%>%
+  mutate(series = word(`Series Name`,1,-2))%>%
+  nest(data = -c(region,series))%>% 
+  mutate(
+    test = map(data, ~ loess(.$value~as.numeric(.$date), span = .2)), # S3 list-col
+    tidied = map(test, augment,se.fit=T
+    )
+  )%>% 
+  unnest(c(tidied,data))%>%
+  select(-test)%>%
+  data.frame()%>%
+  mutate(smooth = `.fitted`)%>%
+  mutate(ref=2)
+
+```
+
+
+```{r}
+
+selection = alt$selection_single(fields=list("region"), bind='legend')
+
+chart <-
+  alt$Chart()$
+  encode(
+    x=alt$X('date:T', axis=alt$Axis(title='Time')),
+    strokeWidth=alt$value(2.5),
+    y=alt$Y('smooth:Q', axis=alt$Axis(title='Annual Inflation Rate')),
+    color=alt$Color("region:N",legend=alt$Legend(title="Worlbank Region")),
+    tooltip=list('region:N','date:T'),
+    opacity=alt$condition(selection, alt$value(1), alt$value(0.2))
+  )$mark_line()$
+  interactive()$
+    add_selection(
+    selection
+  )
+
+rule = alt$Chart(
+)$mark_rule(color='red')$encode(
+    y='ref:Q',
+    strokeWidth=alt$value(4)
+)
+
+all = alt$layer(chart,rule,data=data)$facet('series',columns=2,title="Yearly Inflation Rates per month by Index and Worldbank Regions")
+
+all
+```
+
+I'm very pleased with the result. One could think of using separate y-scales for the facets, however the facets are actually on the same scale (inflation rate). Also the plots can be zoomed and moved in sync using the mouse-wheel, so there is no need for this.
+It would be even nicer to be able to select more than one time-series by clicking the legend, however i did not find out how to do this.
+It would also be nice to include the meaning of the red line into the legend but i also found no good way of doing it since i'm still new to alair. The same goes to excluding the name of the faceting variable unfortunately.
+
