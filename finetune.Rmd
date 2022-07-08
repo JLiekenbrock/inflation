@@ -32,7 +32,7 @@ In the following i will describe my visualisation and finetuning process.
 ### Finding Data
 
 #### Finding a topic
-The first step was finding an intereisting topic. Our group was united in that we wanted to look at data which is currently relevant. Because of the war in Ukraine (and other factors) inflation is a current topic. 
+The first step was finding an interesting topic. Our group was united in that we wanted to look at data which is currently relevant. Because of the war in Ukraine (and other factors) inflation is a current topic. 
 I knew almost nothing about it so far, so i decided to dig in deeper.
 
 #### Finding and narrowing down the data
@@ -117,10 +117,10 @@ tm_shape(World) +
 #### Prototyping the plot with ggplot
 
 The timeseries data can now be grouped by regions. The data contains the timeseries by month, quarter and year.
-I decided to use the monthly data as it is the most fine grained dataset. 
+I decided to use the monthly data as it is the most fine grained. 
 The timeseries by country only contain the Inflation indices by country, to make the countries comparable i decided to calculate the inflation rates by country.
 
-Because i have now timeseries of four inflation types by regions i was certain i want to do a small multiples plot.
+Because i have now timeseries of four inflation types by regions i was certain that it would be a good idea to make a small multiples plot.
 Since i'm fluent in ggplot i usually use it for getting a first look at data.
 
 ```{r preparing data}
@@ -137,7 +137,7 @@ data = sheets%>%
 # converting date
 data = data%>%
   mutate(date=as.POSIXct(paste0(Year,28),format="%Y%m%d"))%>%
-  filter(date>=as.POSIXct("20060101",format="%Y%m%d"))
+  filter(date>=as.POSIXct("20050128",format="%Y%m%d"))
 
 # calculating inflation rates
 data = data%>%
@@ -157,6 +157,7 @@ data = data%>%
   summarise(value=median(value,na.rm=T))
 
 ```
+
 ```{r}
 ggplot()+
   geom_line(data,mapping=aes(date,value,group=region,color=region))+
@@ -174,6 +175,7 @@ ggplot()+
     facet_wrap(~`Series Name`)+
     scale_colour_tableau()
 ```
+
 By default ggplot also shows the confidence intervals for the loess regression, from this one can see, that the confidence interval is mostly small, which is good. For further presentation i will remove the ci's because, it ones again makes the plot harder to read. At this point it would also be nice to add interaction.
 
 ```{r}
@@ -189,7 +191,7 @@ ggplotly(g)
 #### Creating the final version of the plot with altair
 
 The plot above is going into the direction of what i had in mind however i really dislike the overall look of ggplot+plotly, so there would be a lot i would want to improve, so i will just switch out the plot-library to altair now. 
-Altair also supports smoothing with LOESS regression, however it does not properly work with dates, therefor i had to do this by hand before plotting. For further guidance in the plot i also added a horizontal line at two percent inflation rate, which is considered to be the a good amount of inflation by economist.
+Altair also supports smoothing with LOESS regression, however it does not properly work with dates, therefor i had to do this by hand before plotting. For further guidance in the plot i also added a horizontal line at two percent inflation rate, which is considered to be the a good amount of inflation by economists.
 
 
 ```{r smoothing}
