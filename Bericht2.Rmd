@@ -1,10 +1,11 @@
 ---
-title: "Financial Study of Worldbank since 2007"
+title: "Financial Study of Worldbank Data"
 author: "Jan Liekenbrock"
 date: '2022-07-02'
 output: 
   html_document:
     toc: true
+    toc_depth: 4
     number_sections: true
     code_folding: hide
 ---
@@ -17,15 +18,12 @@ library(reticulate)
 #altair::check_altair()
 #altair::install_altair()
 library("sf")
-library("rnaturalearth")
-library("rnaturalearthdata")
 library(tidyverse)
 library(countrycode)
 library(plotly)
-
 library(broom)
 library(purrr)
-
+library(readxl)
 library(ggthemes)
 library(tmap)
 library(countrycode)
@@ -37,16 +35,19 @@ alt$data_transformers$disable_max_rows()
 
 ## Introduction
 
-In this study we will analyse economical Data of the Worldbank...
+In this study we will analyse economical Data collected by the Worldbank. 
+For this we will collect variables available through the Worldbak API using the R-Package WDI, which wraps the API.
 
 ## Region Mapping
 
-To simplify the Data we will aggregate it by regions as defined by the worldbank, please see the map below...
+To simplify the Data we will aggregate it by regions as defined by the Worldbank, which you can see below.
+We also decided to use the same color scheme for all plots, which is Altair10 which you can as well see below.
 
 ```{r map,fig.width=12}
 
 library(tmap)
 
+mappings = map_data("world")
 
 pal = tableau_color_pal(
   palette = "Tableau 10")(10)
@@ -402,48 +403,37 @@ tm_shape(vars) +
 
 ```
 
-## Inflation in Detail
+## Consumer Price Inflation in Detail
 
-## Headline inflation
+In this part we will have a detailed look at Consumer Price Inflation as collected by the Worldbank in the "A Global Database of Inflation" 
+[https://www.worldbank.org/en/research/brief/inflation-database]
+
+### Definitions
+
+Besides Energy Price Inflation and Food Price Inflation we will also have a look at Headline and Core Inflation.
+
+#### Headline inflation (CPI)
 
 Headline inflation is the raw inflation figure reported through the Consumer Price Index (CPI) that is released monthly by the Bureau of Labor Statistics (BLS). The CPI calculates the cost to purchase a fixed basket of goods to determine how much inflation is occurring in the broad economy. The CPI uses a base year and indexes the current year's prices, according to the base year's values.
 
-## Core Inflation
+[https://www.investopedia.com/terms/h/headline-inflation.asp]
+
+Note: When talking about inflation usually Headline inflation is meant.
+
+#### Core Inflation
 
 Core inflation removes the CPI components that can exhibit large amounts of volatility from month to month, which can cause unwanted distortion to the headline figure. The most commonly removed factors are those relating to the costs of food and energy. Food prices can be affected by factors outside of those attributed to the economy, such as environmental shifts that cause issues in the growth of crops. Energy costs, such as oil production, can be affected by forces outside of traditional supply and demand, such as political dissent.
 
+[https://www.investopedia.com/terms/h/headline-inflation.asp]
 
 
-Now we will have a look at Inflation in further Detail.
+### Inflation by worlbank regions
+
+Below you can find a timeseries plot of median inflation rates by inflation index by worldbank regions.
 
 ```{r}
-#source("inflationdata.R")
-load("inflationdata.RData")
 
-data = data%>%
-  mutate(date=as.POSIXct(date))%>%
-  mutate(region = countrycode(sourcevar = data$region,
-                        origin = "iso3n",
-                         destination = "region")
-  )%>%
-  drop_na()%>%
-  group_by(region,`Series Name`,date)%>%
-  summarise(value=median(value,na.rm=T))%>%
-  drop_na()%>%
-  mutate(series = word(`Series Name`,1,-2))%>%
-  nest(data = -c(region,series))%>% 
-  mutate(
-    test = map(data, ~ loess(.$value~as.numeric(.$date), span = .5)), # S3 list-col
-    tidied = map(test, augment,se.fit=T
-    )
-  )%>% 
-  unnest(c(tidied,data))%>%
-  select(-test)%>%
-  data.frame()%>%
-  mutate(smooth = `.fitted`)%>%
-  mutate(ref=2)%>%
-  mutate(crisis=ifelse(
-    date > as.POSIXct(as.Date("2008-10-19 10:15")) & date < as.POSIXct(as.Date("2010-10-19 10:15")), 1, 0))
+load("smoothts.RData")
 
 selection = alt$selection_single(fields=list("region"), bind='legend')
 
@@ -451,34 +441,50 @@ chart <-
   alt$Chart()$
   encode(
     x=alt$X('date:T', axis=alt$Axis(title='Time')),
-    #x = "date:T",
-    #y = "smooth:Q",
-    strokeWidth=alt$value(2),
+    strokeWidth=alt$value(3),
     y=alt$Y('smooth:Q', axis=alt$Axis(title='Annual Inflation Rate')),
-    color="region:N",
+    color=alt$Color("region:N",legend=alt$Legend(title="Worlbank Region")),
     tooltip=list('region:N','date:T'),
     opacity=alt$condition(selection, alt$value(1), alt$value(0.2))
-  )$
-  mark_line()$
+  )$mark_line()$
   interactive()$
     add_selection(
     selection
   )
 
-
 rule = alt$Chart(
 )$mark_rule(color='red')$encode(
     y='ref:Q',
-    strokeWidth=alt$value(5)
+    strokeWidth=alt$value(4)
 )
 
-all = alt$layer(chart,rule,data=data)$facet('series',columns=2,title="Yearly Inflation Rates by Month by Index and Worldbank-Regions")
+all = alt$layer(chart,rule,data=data)$facet('series',columns=2,title="Yearly Inflation Rates per month by Index and Worldbank Regions")
 
 all
 
 ```
 
-## Inflation Heatmap
+The faceted timeseries plot is extremely dense in information. 
+
+The first thing to notice is that Energy Price and Food Price Inflation rates are much more volatile than the others. This especially applies to the Energy Price in North America region.
+
+In general South Asia seems to have the highest Inflation Rates.
+
+The spike in energy prices caused by recent events is especially visible in Europe and North America Regions. It is much greater than the last maximum spike during the global financial crisis around 2008, which caused spikes in inflation in all regions of the world and also affected all indicators, which seems to be a current trend as well. Such a clear global trend has not been visible in the data since the financial crisis in 2008.
+
+This also leads to the observation that Headline Inflation Rates appear to be especially tied between five of the seven regions, which are East Asia & Pacific, Europe and Central Asia, North America, Latin America and Carribean as well as the Middle East. These are also the regions which in general have a inflation rate around two percent, which is supposed to be favourable for economies. 
+The regions South Asia and Sub-Saharan Africa have higher inflation rates and also see spikes which seem not to appear in other regions. This especially visible in the Core Inflation Rates.
+
+To go into more detail about the relationships we will now have a look at different correlations between the timeseries.
+
+### Inflation Correlations
+
+Note! It is "dangerous" to look at correlations of timeseries, as timeseries can have cross-correlation which means they are correlated but with a lag in time. This for example could be the case for energy and food prices where it looks like energy prices rise earlier than food prices. 
+We will still look at the correlations keeping in mind what correlation tells us in this case:
+A direct linear relationship at the same point in time. 
+The correlations were calculated on the raw grouped data.
+
+#### Correlations between Indicators per Region
 
 ```{r, fig.width=12}
 
@@ -514,7 +520,15 @@ alt$Chart(t_long)$mark_rect()$encode(
 
 
 ```
-`
+
+From the correlation heatmaps we can see that the correlations are generally positive. Further there are distinguishable patterns for the regions.
+For East Asia and Pacific the Core Consumer Price seems to be the least correlated with the other inflation rates.
+The Headline Consumer Price seems to be strongly influenced by the Energy and Food Prices. 
+In general North America and South Asia have "odd" patterns of Inflation when compared to other Regions. In both regions the correlation between Energy and Food Prices is extemely low. The Food Price also seems to have little Influence on the Headline Consumer Price Index. If we go back to the Timeseries plot above we can notice, that North America seems to have extremely low and stable Food Inflation Rates.
+
+For further analysis we will look at a switched way of correlations by switching regions and indices.
+
+#### Correlations between Regions per Indicator
 
 ```{r, fig.width=12}
 
@@ -555,3 +569,18 @@ alt$Chart(t_long)$mark_rect()$encode(
 
 
 ```
+
+In this last part we will look into correlation between Price Indices between regions. When we look at the Headline Consumer Price Index we also see, what we saw above when we noticed that South Asia and Sub-Saharan Africa seem to be less correlated with the other regions. This however seems to be the case for North America as well, which we oversaw because it has generally low inflation rates. 
+North America seems to have a rather strong connection to Europe & Central Asia however. 
+
+If we next look at Core Consumer Inflation Rates Correlations we see,
+that these have generally low correlations, which is probably the case because these are not clearly defined and can vary in their calculation dependoing on the regions.
+
+When we look at Food Prices, we see that the Middle East & North Africa Food Prices are rather correlated with the Food Prices in East Asia, Europe and Latin America. Whereas Europe seems to have stronger correlations with the Middle East & North Africa as well as Latin America.
+
+When looking at energy prices the correlation between East Asia & Pacific, Europe & Central Asia as well as Latin America & Carribean is once again visible.
+
+The opposite seems to be the case for North America and South Asia as well as North America and Middle East & North Africa which seem to be generally weekly correlated.
+
+We will not go into further detail. And interesting next step would be to have a look into trade data between regions.
+
