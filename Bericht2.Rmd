@@ -514,11 +514,10 @@ t_long=t%>%
 alt$Chart(t_long)$mark_rect()$encode(
     x='series:N',
     y='name:N',
-    color='value:Q',
+    #color='value:Q',
+    color = alt$Color('value:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100))),
     tooltip = list("series:N","name:N","value:Q")
 )$properties(width=200,height=200)$facet("region:N",columns=4)
-
-
 ```
 
 From the correlation heatmaps we can see that the correlations are generally positive. Further there are distinguishable patterns for the regions.
@@ -563,7 +562,7 @@ t_long=t%>%
 alt$Chart(t_long)$mark_rect()$encode(
     x='series:N',
     alt$Y('name:N', axis=alt$Axis(ticks=FALSE, domain=FALSE)),
-    color='value:Q',
+    color = alt$Color('value:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100))),
     tooltip = list("series:N","name:N","value:Q")
 )$properties(width=300,height=300)$facet("region:N",columns=2)
 
@@ -580,7 +579,238 @@ When we look at Food Prices, we see that the Middle East & North Africa Food Pri
 
 When looking at energy prices the correlation between East Asia & Pacific, Europe & Central Asia as well as Latin America & Carribean is once again visible.
 
-The opposite seems to be the case for North America and South Asia as well as North America and Middle East & North Africa which seem to be generally weekly correlated.
+The opposite seems to be the case for North America and South Asia as well as North America and Middle East & North Africa which seem to be generally weakly correlated.
 
-We will not go into further detail. And interesting next step would be to have a look into trade data between regions.
+In the next section we will have a short look into the cross correlation between Food Prices and Energy Prices of the regions.
+
+##### Cross Correlaton between Energy and Food Price
+
+```{r, fig.width=12, eval = TRUE}
+
+dd = data%>%
+  filter(series %in% c("Energy Price","Food Price"))%>%
+  pivot_wider(id_cols=c(date,region),names_from=series,values_from=value)%>%
+  select(-date)%>%
+  nest(data=-c(region))%>%
+  mutate(crosscor = map(data, ~ccf(.["Energy Price"],.["Food Price"],lag.max=12,type="correlation",plot=F)))%>%
+  mutate(tidied = map(crosscor, tidy))%>%
+  unnest(tidied)%>%
+  select(lag,region,acf)
+
+alt$Chart(dd)$mark_rect()$encode(
+    x='lag:N',
+    alt$Y('region:N', axis=alt$Axis(ticks=FALSE, domain=FALSE)),
+    color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100))),
+    tooltip = list("lag:N","region:N","acf:Q")
+)$properties(width=800,height=800)
+
+```
+
+
+##### Cross Correlaton between Energy and Food Price of North America
+
+```{r, fig.width=12, eval = TRUE}
+
+dd2 = data%>%
+  filter(series %in% c("Energy Price","Food Price"))%>%
+  pivot_wider(id_cols=c(region,date),names_from=series,values_from=value)
+
+t_start = 1
+window_size = 25
+t_end = t_start + window_size
+step_size = 3
+
+rss= data.frame()
+
+
+for(regions in dd2$region%>%unique){
+  i=1
+  t_start = 1
+  t_end = t_start + window_size
+  print(regions)
+  
+  d = dd2%>%filter(region == regions)
+
+  while (t_end< nrow(d)){
+    d1 = d[t_start:t_end,"Energy Price"]
+    d2 = d[t_start:t_end,"Food Price"]
+    rs = ccf(d1,d2,lag.max=12,type="correlation",plot=F)
+    rss = rbind(rss,cbind(regions,i,tidy(rs)))
+    t_start = t_start + step_size
+    t_end = t_end + step_size
+    i = i+1
+  }
+}
+
+
+alt$Chart(rss)$mark_rect()$encode(
+    x='lag:N',
+    alt$Y('i:N', axis=alt$Axis(ticks=FALSE, domain=FALSE)),
+    color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100))),
+    tooltip = list("lag:N","i:N","acf:Q")
+)$properties(width=250,height=250)$facet("regions:N",columns=3)
+
+
+
+```
+
+
+
+#### Correlations between Regions per Indicator
+
+```{r,eval=FALSE}
+
+library(reticulate)
+py_install("Pillow")
+py_install("scipy")
+py_install("numpy")
+py_install("seaborn")
+
+
+```
+
+```{python}
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scipy.stats as stats
+
+df = pd.read_csv('synchrony_sample.csv')
+overall_pearson_r = df.corr().iloc[0,1]
+print(f"Pandas computed Pearson r: {overall_pearson_r}")
+# out: Pandas computed Pearson r: 0.2058774513561943
+
+r, p = stats.pearsonr(df.dropna()['S1_Joy'], df.dropna()['S2_Joy'])
+print(f"Scipy computed Pearson r: {r} and p-value: {p}")
+# out: Scipy computed Pearson r: 0.20587745135619354 and p-value: 3.7902989479463397e-51
+
+# Compute rolling window synchrony
+f,ax=plt.subplots(figsize=(7,3))
+df.rolling(window=30,center=True).median().plot(ax=ax)
+ax.set(xlabel='Time',ylabel='Pearson r')
+ax.set(title=f"Overall Pearson r = {np.round(overall_pearson_r,2)}");
+
+def crosscorr(datax, datay, lag=0, wrap=False):
+    """ Lag-N cross correlation. 
+    Shifted data filled with NaNs 
+    
+    Parameters
+    ----------
+    lag : int, default 0
+    datax, datay : pandas.Series objects of equal length
+
+    Returns
+    ----------
+    crosscorr : float
+    """
+    if wrap:
+        shiftedy = datay.shift(lag)
+        shiftedy.iloc[:lag] = datay.iloc[-lag:].values
+        return datax.corr(shiftedy)
+    else: 
+        return datax.corr(datay.shift(lag))
+
+# Windowed time lagged cross correlation
+seconds = 5
+fps = 30
+no_splits = 20
+samples_per_split = df.shape[0]/no_splits
+rss=[]
+for t in range(0, no_splits):
+    d1 = df['S1_Joy'].loc[(t)*samples_per_split:(t+1)*samples_per_split]
+    d2 = df['S2_Joy'].loc[(t)*samples_per_split:(t+1)*samples_per_split]
+    rs = [crosscorr(d1,d2, lag) for lag in range(-int(seconds*fps),int(seconds*fps+1))]
+    rss.append(rs)
+rss = pd.DataFrame(rss)
+f,ax = plt.subplots(figsize=(10,5))
+sns.heatmap(rss,cmap='RdBu_r',ax=ax)
+ax.set(title=f'Windowed Time Lagged Cross Correlation',xlim=[0,301], xlabel='Offset',ylabel='Window epochs')
+ax.set_xticks([0, 50, 100, 151, 201, 251, 301])
+ax.set_xticklabels([-150, -100, -50, 0, 50, 100, 150]);
+
+plt.show()
+
+# Rolling window time lagged cross correlation
+seconds = 5
+fps = 30
+window_size = 300 #samples
+t_start = 0
+t_end = t_start + window_size
+step_size = 30
+rss=[]
+while t_end < 5400:
+    d1 = df['S1_Joy'].iloc[t_start:t_end]
+    d2 = df['S2_Joy'].iloc[t_start:t_end]
+    rs = [crosscorr(d1,d2, lag, wrap=False) for lag in range(-int(seconds*fps),int(seconds*fps+1))]
+    rss.append(rs)
+    t_start = t_start + step_size
+    t_end = t_end + step_size
+rss = pd.DataFrame(rss)
+
+f,ax = plt.subplots(figsize=(10,10))
+sns.heatmap(rss,cmap='RdBu_r',ax=ax)
+ax.set(title=f'Rolling Windowed Time Lagged Cross Correlation',xlim=[0,301], xlabel='Offset',ylabel='Epochs')
+ax.set_xticks([0, 50, 100, 151, 201, 251, 301])
+ax.set_xticklabels([-150, -100, -50, 0, 50, 100, 150]);
+
+plt.show()
+
+```
+```{r,eval =FALSE}
+library(crqa)
+
+data(crqa) 
+
+d= data%>%
+  filter(region == "North America" & series %in% c("Energy Price","Food Price"))%>%
+  pivot_wider(id_cols=c(date,region),names_from=series,values_from=value)
+
+
+listener = eyemovement$listener
+narrator = eyemovement$narrator
+
+delay = 1; embed = 1; rescale = 1; radius = 0.001;
+normalize = 0; mindiagline = 2; minvertline = 2;
+tw = 0; whiteline = FALSE; recpt = FALSE; side = "both"
+method = 'crqa'; metric = 'euclidean';  
+datatype = "continuous"; windowsize =  200; 
+lagwidth = 40; windowstep = 10
+
+ans = windowdrp(narrator, listener, windowstep, windowsize, lagwidth, 
+                radius, delay, embed, rescale, normalize, 
+                mindiagline, minvertline, tw, 
+                whiteline, recpt, side, method, metric, 
+                datatype)
+
+
+profile = ans$profile; maxrec = ans$maxrec; maxlag = ans$maxlag
+
+plot(profile, type = 'l')
+
+
+```
+
+```{r, fig.width=12, eval = TRUE}
+
+dd = data%>%
+  filter(series %in% c("Energy Price","Food Price"))%>%
+  pivot_wider(id_cols=c(date,region),names_from=series,values_from=value)%>%
+  select(-date)%>%
+  nest(data=-c(region))%>%
+  mutate(crosscor = map(data, ~ccf(.["Energy Price"],.["Food Price"],lag.max=12,type="correlation",plot=F)))%>%
+  mutate(tidied = map(crosscor, tidy))%>%
+  unnest(tidied)%>%
+  select(lag,region,acf)
+
+alt$Chart(dd)$mark_rect()$encode(
+    x='lag:N',
+    alt$Y('region:N', axis=alt$Axis(ticks=FALSE, domain=FALSE)),
+    color='acf:Q',
+    tooltip = list("lag:N","region:N","acf:Q")
+)$properties(width=1200,height=300)
+
+```
 
