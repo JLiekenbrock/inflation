@@ -230,7 +230,7 @@ for(regions in dd2$region%>%unique){
 }
 
 alt$Chart(rss)$mark_rect()$encode(
-    x=alt$X('lag:O', axis=alt$Axis(labels=F,ticks=F)),
+    x=alt$X('lag:O', axis=alt$Axis(labels=F,ticks=F,domain=F)),
     y=alt$Y('i:N', axis=alt$Axis(labels=FALSE,ticks=F,domain=F,title='Time-Window')),
     color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100)),legend=alt$Legend(title="cross correlation")),
     tooltip = list("lag:N",alt$Tooltip('i:N', title="Time-Window"),"acf:Q")
