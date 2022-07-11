@@ -1,0 +1,247 @@
+---
+title: "Rolling Windowed time lagged Cross Correlations / finetuning another visualisation"
+author: "Jan Liekenbrock"
+date: '2022-07-07'
+output: 
+  html_document:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tidyverse)
+library(broom)
+library(purrr)
+library(reticulate)
+library(altair)
+alt$data_transformers$disable_max_rows()
+```
+
+Because of the correlation patterns observed in the group report i got motivated to look into this.
+Since i was already done with my report otherwise but i still want to show the result i will keep things short here.
+
+I got mostly motivated to do this when i saw several heatmaps for cross correlations, that visually appealed to me. 
+After researching them i found out how they are made here, which is also my main source:
+[https://towardsdatascience.com/four-ways-to-quantify-synchrony-between-time-series-data-b99136c4a9c9]
+I adapted the given python code to R in this document below and tried to further improve it.
+
+## Cross Correlaton between Energy and Food Price
+
+At first i computed the cross correlation between Energy and Food Price Inflation using the function ccf.
+The functions shifts the first timeseries given by the value in lag.max to both directions in time and computes the correlation for each shift.
+
+```{r, fig.width=12, eval = TRUE}
+load("smoothts.RData")
+
+dd = data%>%
+  filter(series %in% c("Energy Price","Food Price"))%>%
+  pivot_wider(id_cols=c(date,region),names_from=series,values_from=value)%>%
+  select(-date)%>%
+  nest(data=-c(region))%>%
+  mutate(crosscor = map(data, ~ccf(.["Energy Price"],.["Food Price"],lag.max=12,type="correlation",plot=F)))%>%
+  mutate(tidied = map(crosscor, tidy))%>%
+  unnest(tidied)%>%
+  select(lag,region,acf)
+
+alt$Chart(dd)$mark_rect()$encode(
+    x='lag:N',
+    alt$Y('region:N', axis=alt$Axis(ticks=FALSE, domain=FALSE,labels=F)),
+    color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100)),legend=alt$Legend(title="cross correlation")),
+    tooltip = list("lag:N","region:N","acf:Q")
+)$properties(width=800,height=800)
+
+```
+
+From this one can see, that energy prices tend to lead the food price e.g. correlation is highest when the energy price time series is shifted "to the left". In North America the correlation shifts to negative when the energy price is shifted to the right.
+This is because the timeseries in North America shows strong cycles of inflation and deflation following each other (especially for the energy price).
+
+## Rolling Windowed time lagged Cross Correlations of regions
+
+For the last part we will look into TLCC- Time lagged Cross Correlation which gives even better insight into timeseries and there cross correlation.
+
+### The idea of RWTLCC
+
+In Rolling Windowed time lagged cross correlation the cross correlation is computed for several subseries 
+of the original series, by going through the series with a window. 
+In Case of rolling window TLCC there is overlap between the windows to get a smoother progression.
+This allows to inspect the correlations between timeseries with respect to changes in time.
+
+### RWTLCC on raw data
+
+First we inspect the RWTLCC with a window of 12 month to both sides and an increment of quarters for the rolling window.
+The first window will be in the top row and the last in the bottom one. The smoothed data is the same as in the other reports.
+
+```{r coarse}
+
+load("smoothts.RData")
+
+dd2 = data%>%
+  filter(series %in% c("Energy Price","Food Price"))%>%
+  pivot_wider(id_cols=c(region,date),names_from=series,values_from=value)
+
+window_size = 25
+step_size = 3
+
+rss= data.frame()
+
+for(regions in dd2$region%>%unique){
+  i=1
+  t_start = 1
+  t_end = t_start + window_size
+  
+  d = dd2%>%filter(region == regions)
+
+  while (t_end< nrow(d)){
+    d1 = d[t_start:t_end,"Energy Price"]
+    d2 = d[t_start:t_end,"Food Price"]
+    rs = ccf(d1,d2,lag.max=12,type="correlation",plot=F)
+    rss = rbind(rss,cbind(regions,i,tidy(rs)))
+    t_start = t_start + step_size
+    t_end = t_end + step_size
+    i = i+1
+  }
+}
+
+alt$Chart(rss)$mark_rect()$encode(
+    x='lag:N',
+    y=alt$Y('i:N', axis=alt$Axis(labels=FALSE,ticks=F,domain=F,title='Time-Window')),
+    #color='value:Q',
+    color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100)),legend=alt$Legend(title="cross correlation")),
+    tooltip = list("lag:N",alt$Tooltip('i:N', title="Time-Window"),"acf:Q")
+)$properties(width=250,height=250)$facet(alt$Facet("regions:N",title=py_none()),columns=3,title="RWTLCC between energy and food prices inflation by region between 2006 and 2022")
+
+
+  
+```
+
+The result looks good already but it's not very smooth.
+
+### RWTLCC on smooth data
+
+We do the same as above, but on the smoothed data we plotted before when we visualised the time series.
+
+```{r smooth}
+library(tidyverse)
+library(broom)
+library(purrr)
+
+load("smoothts.RData")
+
+dd2 = data%>%
+  filter(series %in% c("Energy Price","Food Price"))%>%
+  pivot_wider(id_cols=c(region,date),names_from=series,values_from=smooth)
+
+window_size = 25
+step_size = 3
+
+rss= data.frame()
+
+
+for(regions in dd2$region%>%unique){
+  i=1
+  t_start = 1
+  t_end = t_start + window_size
+  d = dd2%>%filter(region == regions)
+
+  while (t_end< nrow(d)){
+    d1 = d[t_start:t_end,"Energy Price"]
+    d2 = d[t_start:t_end,"Food Price"]
+    rs = ccf(d1,d2,lag.max=12,type="correlation",plot=F)
+    rss = rbind(rss,cbind(regions,i,tidy(rs)))
+    t_start = t_start + step_size
+    t_end = t_end + step_size
+    i = i+1
+  }
+}
+
+alt$Chart(rss)$mark_rect()$encode(
+    x='lag:N',
+    y=alt$Y('i:N', axis=alt$Axis(labels=FALSE,ticks=F,domain=F,title='Time-Window')),
+    #color='value:Q',
+    color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100)),legend=alt$Legend(title="cross correlation")),
+    tooltip = list("lag:N",alt$Tooltip('i:N', title="Time-Window"),"acf:Q")
+)$properties(width=250,height=250)$facet(alt$Facet("regions:N",title=py_none()),columns=3,title="RWTLCC between LOESS smoothed energy and food price inflation rates by region between 2006 and 2022")
+
+
+```
+
+The plot got smoother, but is still very pixelated because the data is given only by month.
+
+### RWTLCC on LOESS interpolated data
+
+To get a smoother plot we will increase the granularity of the time by intepolating it.
+We already fitted loess regression models for all regions, so we only have to use this model to predict 
+on finer date progression. We will switch to weeks instead of month now.
+
+Further we will increase the window to 18 months. The stepsize of the rolling window will remain quarters
+
+```{r highres}
+
+load("smoothts.RData")
+
+s = seq(min(data$date),max(data$date),by="7 days")
+
+t = data%>%
+  mutate(series = word(`Series.Name`,1,-2))%>%
+  nest(data = -c(region,series))%>% 
+  mutate(
+    test = map(data, ~ loess(.$value~as.numeric(.$date), span = .2)), # S3 list-col
+    pred = map(test, predict,newdata = s)
+  )%>%
+  unnest(c(pred))
+  
+t$date=rep(s,length(data$region%>%unique)*length(data$`Series.Name`%>%unique))
+
+t = t%>%select(-c(data,test))
+
+dd2 = t%>%
+  filter(series %in% c("Energy Price","Food Price"))%>%
+  pivot_wider(id_cols=c(region,date),names_from=series,values_from=pred)
+
+span_months = 18
+
+t_start = 1
+window_size = (span_months*2+1)*4
+t_end = t_start + window_size
+step_size = 3*4
+
+rss= data.frame()
+
+for(regions in dd2$region%>%unique){
+  i=1
+  t_start = 1
+  t_end = t_start + window_size
+
+  d = dd2%>%filter(region == regions)
+
+  while (t_end< nrow(d)){
+    d1 = d[t_start:t_end,"Energy Price"]
+    d2 = d[t_start:t_end,"Food Price"]
+    rs = ccf(d1,d2,lag.max=span_months*4,type="correlation",plot=F)
+    rss = rbind(rss,cbind(regions,i,tidy(rs)))
+    t_start = t_start + step_size
+    t_end = t_end + step_size
+    i = i+1
+  }
+}
+
+alt$Chart(rss)$mark_rect()$encode(
+    x=alt$X('lag:O', axis=alt$Axis(labels=F,ticks=F)),
+    y=alt$Y('i:N', axis=alt$Axis(labels=FALSE,ticks=F,domain=F,title='Time-Window')),
+    color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100)),legend=alt$Legend(title="cross correlation")),
+    tooltip = list("lag:N",alt$Tooltip('i:N', title="Time-Window"),"acf:Q")
+)$properties(width=250,height=250)$facet(alt$Facet("regions:N",title=py_none()),columns=3,title="RWTLCC between LOESS interpolated energy and food price inflation rates by region between 2006 and 2022")
+
+
+
+
+```
+
+No we have a smooth plot. It tells us, that in North America the cross-correlation between energy and food price was consistent through the last 16 years in a way, that the energy price always lead the food price inflation by around 25 weeks in this case.
+
+Africa is the only region that tends to have the relation ship the other way around, meaning that food prices rather lead, but only very slightly.
+The other regions show rather complex patterns of cross correlation.
