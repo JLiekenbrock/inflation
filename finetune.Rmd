@@ -20,7 +20,7 @@ library(tidyverse)
 library(readxl)
 library(broom)
 library(purrr)
-
+library(reticulate)
 library(altair)
 alt$data_transformers$disable_max_rows()
 ```
@@ -118,7 +118,7 @@ tm_shape(World) +
 
 The timeseries data can now be grouped by regions. The data contains the timeseries by month, quarter and year.
 I decided to use the monthly data as it is the most fine grained. 
-The timeseries by country only contain the Inflation indices by country, to make the countries comparable i decided to calculate the inflation rates by country.
+The timeseries by country only contain the Inflation indices by country, to make the countries comparable i decided to calculate the inflation rates by country. To group the data into regions i calculated the median per region, because the distributions are way to skewed for taking the mean. The worldbank does the same in it's reports on this topic by the way.
 
 Because i have now timeseries of four inflation types by regions i was certain that it would be a good idea to make a small multiples plot.
 Since i'm fluent in ggplot i usually use it for getting a first look at data.
@@ -149,6 +149,8 @@ data = data%>%
 data$region=countrycode(sourcevar = data$`Country Code`,
                         origin = "wb",
                          destination = "region")
+
+na = data%>%filter(is.na(region))
 
 # grouping by regions
 data = data%>%
@@ -210,6 +212,28 @@ data = data%>%
   mutate(smooth = `.fitted`)%>%
   mutate(ref=2)
 
+save(data,file="smoothts.RData")
+
+s = seq(min(data$date),max(data$date),by="7 days")
+
+t = data%>%
+  mutate(series = word(`Series.Name`,1,-2))%>%
+  nest(data = -c(region,series))%>% 
+  mutate(
+    test = map(data, ~ loess(.$value~as.numeric(.$date), span = .2)), # S3 list-col
+    pred = map(test, predict,newdata = s)
+  )%>%
+  unnest(c(pred))
+
+t$date=rep(s,length(data$region%>%unique)*length(data$`Series.Name`%>%unique))
+
+t = t%>%select(-c(data,test))
+
+ggplot()+
+  geom_smooth(t,mapping=aes(date,pred,group=region,color=region),span=.2)+
+    facet_wrap(~series)+
+    scale_colour_tableau()
+
 ```
 
 
@@ -238,12 +262,15 @@ rule = alt$Chart(
     strokeWidth=alt$value(4)
 )
 
-all = alt$layer(chart,rule,data=data)$facet('series',columns=2,title="Yearly Inflation Rates per month by Index and Worldbank Regions")
+all = alt$layer(chart,rule,data=data)$facet(alt$Facet("series:N",title=py_none()),columns=2,title="Yearly Inflation Rates per month by Index and Worldbank Regions")
 
 all
+
+
+
 ```
 
 I'm very pleased with the result. One could think of using separate y-scales for the facets, however the facets are actually on the same scale (inflation rate). Also the plots can be zoomed and moved in sync using the mouse-wheel, so there is no need for this.
 It would be even nicer to be able to select more than one time-series by clicking the legend, however i did not find out how to do this.
-It would also be nice to include the meaning of the red line into the legend but i also found no good way of doing it since i'm still new to alair. The same goes to excluding the name of the faceting variable unfortunately.
+It would also be nice to include the meaning of the red line into the legend but i also found no good way of doing it since i'm still new to alair.
 
