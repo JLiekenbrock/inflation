@@ -35,13 +35,16 @@ alt$data_transformers$disable_max_rows()
 
 ## Introduction
 
-In this study we will analyse economical Data collected by the Worldbank. 
-For this we will collect variables available through the Worldbak API using the R-Package WDI, which wraps the API.
+Given the background of currently steeply rising consumer prices and stock market instability we decided to look into economical data.
+In this study we will analyse economical Data collected by the Worldbank which we put together ourselves through the worldbank api wrapped in the r-package "WDI".
+We will first define a regional mapping to decrease the complexity of the data which is by country. 
+Then we will have a look at the GDP in historical context on country and region level. Afterwards we will look into the relationship between economical and social indices such as HPI and the connection to inflation.
+Finally we will have a deeper look into consumer price inflation.
 
 ## Region Mapping
 
 To simplify the Data we will aggregate it by regions as defined by the Worldbank, which you can see below.
-We also decided to use the same color scheme for all plots, which is Altair10 which you can as well see below.
+We also decided to use the same color scheme for all plots, which is tableau10 which you can as well see below.
 
 ```{r map,fig.width=12}
 
@@ -81,7 +84,12 @@ tm_shape(World) +
 #     tm_polygons("wb",palette=pal)
 
 ```
-## Racing Bar Chart 
+## Historical GDP data
+In this section, we will take a look at historical GDP data from 1960 to the most recent data from 2021 by the World Bank. To begin with, we look at animated data from the top 20 countries in terms of GDP volume over this time period using animated racing bar chart. Then we look at the development of GDP in the same period of time grouped by the regions. Counties are combined into regions according to World Bank, which were illustrated on the map in the previous section.
+
+The GDP data itself were imported from World Bank database using API via WDI library.
+
+### Racing Bar Chart 
 
 ```{r eval = FALSE, include=TRUE}
 
@@ -186,11 +194,95 @@ anim_save(
 
 ```
 
-In this section, there is an animated graph of top-20 countries by GDP from 1960 to 2021. The GDP data are imported from worldbank using API from WDI library. The chart is plotted using ggplot, animated using gganimate and saved to mp4 using av.
+As mentioned before, the animated graph shows top-20 countries by GDP volume from 1960 to 2021 according to World Bank data. The colors indicate the world regions.
+
+The static plot was created using ggplot library, which then was rendered using gganimate library and finally converted to mp4 using av library. The country flags were added via the ggimage library.
+
+In 1960, USA is the clear economical world power, which GDP is contantly growing with the time, but there are many other countries, which GDP is growing more rapidly, for example China, which GDP volume is currently almost caught up the USA's value. On the other hand, there are a number of european counties, which GDP is growing constantly, slower than China's but much faster then the USA's, which combined GDP volume is comparable high to that of the US and China.
 
 <iframe width="720" height="480" src="gdp_barchart_race.mp4" align="middle" frameborder="0" sandbox></iframe>
 
-## Relationship between selected Worllbank Indicators
+### Historical GDP growth by region
+
+```{r eval = FALSE, include=TRUE}
+
+library(WDI)
+library(dplyr)
+library(tidyr)
+library(sf)
+library(rnaturalearth)
+library(janitor)
+library(ggplot2)
+library(gganimate)
+library(gifski)
+library(ggimage)
+library(av)
+library(ggthemes)
+
+start_year <- 1960
+end_year <- 2021
+worldbank_data = WDI("NY.GDP.MKTP.CD",  country = "all" ,start=start_year,end=end_year)
+
+worldbank_data=worldbank_data%>%
+  rename(gdp = 'NY.GDP.MKTP.CD')
+
+world_regions <- ne_countries(scale = "medium", returnclass = "sf")%>%
+  filter(sovereignt!="Antarctica")
+
+gdp_ready <- worldbank_data%>%
+  left_join(st_drop_geometry(world_regions[c("iso_a2","region_wb")]),by=c("iso2c"="iso_a2"))%>%
+  rename(Region = region_wb)%>%
+  drop_na()
+
+library(plyr)
+
+groupColumns <- c("Region","year")
+dataColumns <- c("gdp")
+gdp_regions <- ddply(gdp_ready, groupColumns, function(x) colSums(x[dataColumns]))
+
+# Data for plot
+gdp_regions$Region <- factor(gdp_regions$Region,
+                             level = c('Sub-Saharan Africa',
+                                       'Middle East & North Africa',
+                                       'Europe & Central Asia',
+                                       'East Asia & Pacific',
+                                       'North America',
+                                       'Latin America & Caribbean',
+                                       'South Asia'
+                                       )
+                             )
+
+gdp_tot <- sum(gdp_regions$gdp)
+
+pdat = gdp_regions %>% 
+  group_by(year) %>% 
+  mutate(gdp_pct = gdp/sum(gdp)) %>% 
+  arrange(Region) %>% 
+  # Get cumulative value of cc
+  mutate(gdp_cum = cumsum(gdp) - 0.5*gdp) %>% 
+  mutate(gdp_pct_cum = cumsum(gdp_pct) - 0.5*gdp_pct) %>% 
+  mutate(gdp_sum_year = sum(gdp)/1e9) %>% 
+  ungroup
+
+png(filename="polar_gdp_plot.png")
+ggplot(pdat, aes(x=gdp_pct_cum, y=year, fill=Region, alpha=gdp_sum_year)) +
+  geom_tile(aes(width=gdp_pct), colour="white", size=0.3) +
+  coord_polar() +
+  theme_void() +
+  theme(axis.text.y=element_text(angle=0, colour="grey40", size=9),
+        axis.ticks.y=element_line(),
+        axis.ticks.length=unit(0.1,"cm")) +
+  scale_alpha_continuous(range=c(0.5,1)) +
+  scale_color_tableau() +
+  scale_fill_tableau()
+dev.off()
+```
+
+By looking at the circular plot, the shares of the individual regions can be estimated very well. In the 1960s, the GDP of the North American region was 50%, the European region had shares about 25% of the total, the other regions the remaining 25%. Over time, the share of the Northern American region in total GDP shrank to about a quarter. In the European region, there were three large jumps in GDP value during this period, with the share returning to the 1960 value. The East Asian region had a steady increase in GDP with the jump in the 1990s. The other regions had steady increases in share over the years.
+
+![](polar_gdp_plot.png){#id .class width=70% height=70%}
+
+## Relationship between selected Worldbank Indicators
 
 ```{r code, eval = FALSE}
 library(altair)
@@ -358,6 +450,8 @@ western %>%
        y = 'Inflation')
 
 ```
+
+Economic indicators - GDP and GDP per capita, not only show a country’s economic performance as a whole as well as on an individual level. They are also strongly correlated with other important figures e.g., life expectancy, personal well-being and, to a lesser degree, with one's happiness. The aim of this visualization paper is to find out how the GDP of each country has developed over the years, the correlation between GDP and other indicators.
 
 ![](https://raw.githubusercontent.com/Lsacy/inflation/main/life_exp_gdp.png)
 
@@ -581,60 +675,58 @@ When looking at energy prices the correlation between East Asia & Pacific, Europ
 
 The opposite seems to be the case for North America and South Asia as well as North America and Middle East & North Africa which seem to be generally weakly correlated.
 
-In the next section we will have a short look into the cross correlation between Food Prices and Energy Prices of the regions.
 
-##### Cross Correlaton between Energy and Food Price
+### RWTLCC on LOESS interpolated data
 
-```{r, fig.width=12, eval = TRUE}
+To get a smoother plot we will increase the granularity of the time by intepolating it.
+We already fitted loess regression models for all regions, so we only have to use this model to predict 
+on finer date progression. We will switch to weeks instead of month now.
 
-dd = data%>%
+Further we will increase the window to 18 months. The stepsize of the rolling window will remain quarters
+
+```{r highres}
+
+load("smoothts.RData")
+
+s = seq(min(data$date),max(data$date),by="7 days")
+
+t = data%>%
+  mutate(series = word(`Series.Name`,1,-2))%>%
+  nest(data = -c(region,series))%>% 
+  mutate(
+    test = map(data, ~ loess(.$value~as.numeric(.$date), span = .2)), # S3 list-col
+    pred = map(test, predict,newdata = s)
+  )%>%
+  unnest(c(pred))
+  
+t$date=rep(s,length(data$region%>%unique)*length(data$`Series.Name`%>%unique))
+
+t = t%>%select(-c(data,test))
+
+dd2 = t%>%
   filter(series %in% c("Energy Price","Food Price"))%>%
-  pivot_wider(id_cols=c(date,region),names_from=series,values_from=value)%>%
-  select(-date)%>%
-  nest(data=-c(region))%>%
-  mutate(crosscor = map(data, ~ccf(.["Energy Price"],.["Food Price"],lag.max=12,type="correlation",plot=F)))%>%
-  mutate(tidied = map(crosscor, tidy))%>%
-  unnest(tidied)%>%
-  select(lag,region,acf)
+  pivot_wider(id_cols=c(region,date),names_from=series,values_from=pred)
 
-alt$Chart(dd)$mark_rect()$encode(
-    x='lag:N',
-    alt$Y('region:N', axis=alt$Axis(ticks=FALSE, domain=FALSE)),
-    color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100))),
-    tooltip = list("lag:N","region:N","acf:Q")
-)$properties(width=800,height=800)
-
-```
-
-
-##### Cross Correlaton between Energy and Food Price of North America
-
-```{r, fig.width=12, eval = TRUE}
-
-dd2 = data%>%
-  filter(series %in% c("Energy Price","Food Price"))%>%
-  pivot_wider(id_cols=c(region,date),names_from=series,values_from=value)
+span_months = 18
 
 t_start = 1
-window_size = 25
+window_size = (span_months*2+1)*4
 t_end = t_start + window_size
-step_size = 3
+step_size = 3*4
 
 rss= data.frame()
-
 
 for(regions in dd2$region%>%unique){
   i=1
   t_start = 1
   t_end = t_start + window_size
-  print(regions)
-  
+
   d = dd2%>%filter(region == regions)
 
   while (t_end< nrow(d)){
     d1 = d[t_start:t_end,"Energy Price"]
     d2 = d[t_start:t_end,"Food Price"]
-    rs = ccf(d1,d2,lag.max=12,type="correlation",plot=F)
+    rs = ccf(d1,d2,lag.max=span_months*4,type="correlation",plot=F)
     rss = rbind(rss,cbind(regions,i,tidy(rs)))
     t_start = t_start + step_size
     t_end = t_end + step_size
@@ -642,175 +734,20 @@ for(regions in dd2$region%>%unique){
   }
 }
 
-
 alt$Chart(rss)$mark_rect()$encode(
-    x='lag:N',
-    alt$Y('i:N', axis=alt$Axis(ticks=FALSE, domain=FALSE)),
-    color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100))),
-    tooltip = list("lag:N","i:N","acf:Q")
-)$properties(width=250,height=250)$facet("regions:N",columns=3)
-
-
-
+    x=alt$X('lag:O', axis=alt$Axis(labels=F,ticks=F,domain=F)),
+    y=alt$Y('i:N', axis=alt$Axis(labels=FALSE,ticks=F,domain=F,title='Time-Window')),
+    color = alt$Color('acf:Q', scale = alt$Scale(domain=list(-1,1),range = cm.colors(100)),legend=alt$Legend(title="cross correlation")),
+    tooltip = list("lag:N",alt$Tooltip('i:N', title="Time-Window"),"acf:Q")
+)$properties(width=250,height=250)$facet(alt$Facet("regions:N",title=py_none()),columns=3,title="RWTLCC between LOESS interpolated energy and food price inflation rates by region between 2006 and 2022")
 ```
 
+## Conclusion
+
+We tried to use RStudio Cloud in the beginning which did not work that well for us because it was too complicated and unreliable. Also we played around with shiny too try out different regional mappings which 
+was too complicated as well, as it is more sensible to stick with one regional mapping for our report. Which in this case, since we used economical data was the worldbanks regional mapping.
+All of us learnt how to use ggplot which worked well for all of us as it also has great extensions like "ggimages" and "gganimate". We also got to use the "countrycodes" R-Package which solves the common problem of country mappings for different data elegantly. One of us decided to altair for the visualisations which was a bit tedious in the beginning but turned into good results in the end.
 
 
-#### Correlations between Regions per Indicator
 
-```{r,eval=FALSE}
-
-library(reticulate)
-py_install("Pillow")
-py_install("scipy")
-py_install("numpy")
-py_install("seaborn")
-
-
-```
-
-```{python}
-
-
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import scipy.stats as stats
-
-df = pd.read_csv('synchrony_sample.csv')
-overall_pearson_r = df.corr().iloc[0,1]
-print(f"Pandas computed Pearson r: {overall_pearson_r}")
-# out: Pandas computed Pearson r: 0.2058774513561943
-
-r, p = stats.pearsonr(df.dropna()['S1_Joy'], df.dropna()['S2_Joy'])
-print(f"Scipy computed Pearson r: {r} and p-value: {p}")
-# out: Scipy computed Pearson r: 0.20587745135619354 and p-value: 3.7902989479463397e-51
-
-# Compute rolling window synchrony
-f,ax=plt.subplots(figsize=(7,3))
-df.rolling(window=30,center=True).median().plot(ax=ax)
-ax.set(xlabel='Time',ylabel='Pearson r')
-ax.set(title=f"Overall Pearson r = {np.round(overall_pearson_r,2)}");
-
-def crosscorr(datax, datay, lag=0, wrap=False):
-    """ Lag-N cross correlation. 
-    Shifted data filled with NaNs 
-    
-    Parameters
-    ----------
-    lag : int, default 0
-    datax, datay : pandas.Series objects of equal length
-
-    Returns
-    ----------
-    crosscorr : float
-    """
-    if wrap:
-        shiftedy = datay.shift(lag)
-        shiftedy.iloc[:lag] = datay.iloc[-lag:].values
-        return datax.corr(shiftedy)
-    else: 
-        return datax.corr(datay.shift(lag))
-
-# Windowed time lagged cross correlation
-seconds = 5
-fps = 30
-no_splits = 20
-samples_per_split = df.shape[0]/no_splits
-rss=[]
-for t in range(0, no_splits):
-    d1 = df['S1_Joy'].loc[(t)*samples_per_split:(t+1)*samples_per_split]
-    d2 = df['S2_Joy'].loc[(t)*samples_per_split:(t+1)*samples_per_split]
-    rs = [crosscorr(d1,d2, lag) for lag in range(-int(seconds*fps),int(seconds*fps+1))]
-    rss.append(rs)
-rss = pd.DataFrame(rss)
-f,ax = plt.subplots(figsize=(10,5))
-sns.heatmap(rss,cmap='RdBu_r',ax=ax)
-ax.set(title=f'Windowed Time Lagged Cross Correlation',xlim=[0,301], xlabel='Offset',ylabel='Window epochs')
-ax.set_xticks([0, 50, 100, 151, 201, 251, 301])
-ax.set_xticklabels([-150, -100, -50, 0, 50, 100, 150]);
-
-plt.show()
-
-# Rolling window time lagged cross correlation
-seconds = 5
-fps = 30
-window_size = 300 #samples
-t_start = 0
-t_end = t_start + window_size
-step_size = 30
-rss=[]
-while t_end < 5400:
-    d1 = df['S1_Joy'].iloc[t_start:t_end]
-    d2 = df['S2_Joy'].iloc[t_start:t_end]
-    rs = [crosscorr(d1,d2, lag, wrap=False) for lag in range(-int(seconds*fps),int(seconds*fps+1))]
-    rss.append(rs)
-    t_start = t_start + step_size
-    t_end = t_end + step_size
-rss = pd.DataFrame(rss)
-
-f,ax = plt.subplots(figsize=(10,10))
-sns.heatmap(rss,cmap='RdBu_r',ax=ax)
-ax.set(title=f'Rolling Windowed Time Lagged Cross Correlation',xlim=[0,301], xlabel='Offset',ylabel='Epochs')
-ax.set_xticks([0, 50, 100, 151, 201, 251, 301])
-ax.set_xticklabels([-150, -100, -50, 0, 50, 100, 150]);
-
-plt.show()
-
-```
-```{r,eval =FALSE}
-library(crqa)
-
-data(crqa) 
-
-d= data%>%
-  filter(region == "North America" & series %in% c("Energy Price","Food Price"))%>%
-  pivot_wider(id_cols=c(date,region),names_from=series,values_from=value)
-
-
-listener = eyemovement$listener
-narrator = eyemovement$narrator
-
-delay = 1; embed = 1; rescale = 1; radius = 0.001;
-normalize = 0; mindiagline = 2; minvertline = 2;
-tw = 0; whiteline = FALSE; recpt = FALSE; side = "both"
-method = 'crqa'; metric = 'euclidean';  
-datatype = "continuous"; windowsize =  200; 
-lagwidth = 40; windowstep = 10
-
-ans = windowdrp(narrator, listener, windowstep, windowsize, lagwidth, 
-                radius, delay, embed, rescale, normalize, 
-                mindiagline, minvertline, tw, 
-                whiteline, recpt, side, method, metric, 
-                datatype)
-
-
-profile = ans$profile; maxrec = ans$maxrec; maxlag = ans$maxlag
-
-plot(profile, type = 'l')
-
-
-```
-
-```{r, fig.width=12, eval = TRUE}
-
-dd = data%>%
-  filter(series %in% c("Energy Price","Food Price"))%>%
-  pivot_wider(id_cols=c(date,region),names_from=series,values_from=value)%>%
-  select(-date)%>%
-  nest(data=-c(region))%>%
-  mutate(crosscor = map(data, ~ccf(.["Energy Price"],.["Food Price"],lag.max=12,type="correlation",plot=F)))%>%
-  mutate(tidied = map(crosscor, tidy))%>%
-  unnest(tidied)%>%
-  select(lag,region,acf)
-
-alt$Chart(dd)$mark_rect()$encode(
-    x='lag:N',
-    alt$Y('region:N', axis=alt$Axis(ticks=FALSE, domain=FALSE)),
-    color='acf:Q',
-    tooltip = list("lag:N","region:N","acf:Q")
-)$properties(width=1200,height=300)
-
-```
 
