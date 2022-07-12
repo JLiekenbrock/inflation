@@ -521,7 +521,7 @@ Core inflation removes the CPI components that can exhibit large amounts of vola
 [https://www.investopedia.com/terms/h/headline-inflation.asp]
 
 
-### Inflation by worlbank regions
+### Inflation by worldbank regions
 
 Below you can find a timeseries plot of median inflation rates by inflation index by worldbank regions.
 
@@ -573,10 +573,9 @@ To go into more detail about the relationships we will now have a look at differ
 
 ### Inflation Correlations
 
-Note! It is "dangerous" to look at correlations of timeseries, as timeseries can have cross-correlation which means they are correlated but with a lag in time. This for example could be the case for energy and food prices where it looks like energy prices rise earlier than food prices. 
-We will still look at the correlations keeping in mind what correlation tells us in this case:
-A direct linear relationship at the same point in time. 
-The correlations were calculated on the raw grouped data.
+Note! It is "dangerous" to look at correlations of timeseries, as timeseries can have cross-correlation which means they are correlated but with a lag in time. This for example could be the case for energy and food prices where it looks like energy prices rise earlier than food prices. This will be investigated in the last secion.
+
+But first we look at the pearson correlations calculated on the raw grouped data.
 
 #### Correlations between Indicators per Region
 
@@ -667,7 +666,7 @@ In this last part we will look into correlation between Price Indices between re
 North America seems to have a rather strong connection to Europe & Central Asia however. 
 
 If we next look at Core Consumer Inflation Rates Correlations we see,
-that these have generally low correlations, which is probably the case because these are not clearly defined and can vary in their calculation dependoing on the regions.
+that these have generally low correlations, which is probably the case because these are not clearly defined and can vary in their calculation depending on the regions.
 
 When we look at Food Prices, we see that the Middle East & North Africa Food Prices are rather correlated with the Food Prices in East Asia, Europe and Latin America. Whereas Europe seems to have stronger correlations with the Middle East & North Africa as well as Latin America.
 
@@ -675,14 +674,18 @@ When looking at energy prices the correlation between East Asia & Pacific, Europ
 
 The opposite seems to be the case for North America and South Asia as well as North America and Middle East & North Africa which seem to be generally weakly correlated.
 
-
 ### RWTLCC on LOESS interpolated data
 
-To get a smoother plot we will increase the granularity of the time by intepolating it.
-We already fitted loess regression models for all regions, so we only have to use this model to predict 
-on finer date progression. We will switch to weeks instead of month now.
+In this last part we will look into the Rolling Windowed time lagged cross correlation between energy prices and food prices by regions as we saw surprising patterns by calculating the 
+pearson correlation for North Amercia and South Asia above. I got inspired by this article: [https://towardsdatascience.com/four-ways-to-quantify-synchrony-between-time-series-data-b99136c4a9c9]
 
-Further we will increase the window to 18 months. The stepsize of the rolling window will remain quarters
+To get a smooth plot the data was interpolated using LOESS regression. 
+
+How to read the plot: The data was interpolated so that it is weekly instead of monthly. Each row contains a window of 3 Years of the data. 
+So the top row in the plot shows the subseries of the food and energy price inflation between 2006 and 2009. In each row the series will be shifted against each other by -18 and +18 months, this makes up the lag column.
+From row to row of the heatmap the rolling window goes further by a quarter, so that the last shows the cross correlation of the data from 2019 to 2022.
+
+The plot therefore shows us the change of correlation patterns between food prices and energy prices with respect to time.
 
 ```{r highres}
 
@@ -741,6 +744,14 @@ alt$Chart(rss)$mark_rect()$encode(
     tooltip = list("lag:N",alt$Tooltip('i:N', title="Time-Window"),"acf:Q")
 )$properties(width=250,height=250)$facet(alt$Facet("regions:N",title=py_none()),columns=3,title="RWTLCC between LOESS interpolated energy and food price inflation rates by region between 2006 and 2022")
 ```
+
+When we compare the results to the simple pearson correlation heatmap by region from above we get to see that the energy price in North America and South Asia are not actually weekly correlated.
+They just show changing patterns of dependency where in South Asia the Energy Price as well as the Food Price can be the leading series depnding on the point in time.
+
+In North America the energy prices tends to lead e.g. rise before the energy price. But it is shifting in how far it leads, so that the correlation without lag is positive as well as negative which means it's almost zero when the correlation is calculated without shifting.
+
+Africa is the only region that tends to have the relation ship the other way around, meaning that food prices rather lead, but only very slightly.
+The other regions show rather complex patterns of cross correlation.
 
 ## Conclusion
 

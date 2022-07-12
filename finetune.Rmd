@@ -25,7 +25,8 @@ library(altair)
 alt$data_transformers$disable_max_rows()
 ```
 
-In the following i will describe my visualisation and finetuning process.
+In the following i will describe my visualisation and finetuning process of my time-series chart.
+The target group is not very specific as the visualisation is not that hard to understand as long as one knows about the definitions of the different inflation types.
 
 ## Process steps
 
@@ -269,8 +270,10 @@ all
 
 
 ```
+The graphic is rather dense in information and there is a lot to discover but it clearly shows, that all inflation rates are tend to be corelated across regions, especially during crisises.
+It is also clearly visible, that the Energy Price inflation is most volatile.
 
-I'm very pleased with the result. One could think of using separate y-scales for the facets, however the facets are actually on the same scale (inflation rate). Also the plots can be zoomed and moved in sync using the mouse-wheel, so there is no need for this.
+One could think of using separate y-scales for the facets, however the facets are actually on the same scale (inflation rate). Also the plots can be zoomed and moved in sync using the mouse-wheel, so there is no need for this.
 It would be even nicer to be able to select more than one time-series by clicking the legend, however i did not find out how to do this.
 It would also be nice to include the meaning of the red line into the legend but i also found no good way of doing it since i'm still new to alair.
 
