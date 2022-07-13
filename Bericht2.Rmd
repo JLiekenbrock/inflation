@@ -50,7 +50,7 @@ We also decided to use the same color scheme for all plots, which is tableau10 w
 
 library(tmap)
 
-mappings = map_data("world")
+#mappings = map_data("world")
 
 pal = tableau_color_pal(
   palette = "Tableau 10")(10)
@@ -282,115 +282,163 @@ By looking at the circular plot, the shares of the individual regions can be est
 
 ![](polar_gdp_plot.png){#id .class width=70% height=70%}
 
-## Relationship between selected Worldbank Indicators
+## Economic Indicators and relationship with well being
 
-```{r code, eval = FALSE}
-library(altair)
-library(reticulate)
-#reticulate::py_config()
-#altair::check_altair()
-#altair::install_altair()
-library("sf")
-library("rnaturalearth")
-library("rnaturalearthdata")
-library(tidyverse)
-library(countrycode)
-library(plotly)
+Economic indicator, such as GDP and GDP per capita, not only show a country’s economic performance as a whole as well as on an individual level. They are also strongly correlated with other important figures e.g., life expectancy, personal well-being and, to a lesser degree, with one’s happiness. In the following diagrams we will be showing the correlation between GDP / GDP per capita and before mentioned social economic indices.
 
-library(broom)
-library(purrr)
+```{r}
 
-library(ggthemes)
-library(tmap)
-library(countrycode)
-
-data("World")
 load("worldbankindicators.RData")
 
-
-
+### manipulation of the datasets for further usage
+# change country code in the World dataset with countrycode()
 World$iso2c=countrycode(sourcevar = World$iso_a3,
                         origin = "iso3c",
                         destination = "iso2c")
 
+World$wb=countrycode(sourcevar = World$iso_a3,
+                        origin = "iso3c",
+                         destination = "region")
+
+
+World = World%>%
+  filter(!is.na(wb))%>%
+  filter(continent!="Antarctica")
+
+# average of the indicators (inflation, GDP, Interest rate, Population, Unemployment) from the worldbank dataset
 averaged_data <- worldbank_data%>%
   group_by(iso2c, country, Indicator)%>%
   summarise(Values=mean(Values,na.rm=T))
 
+joined_average <- World%>%left_join(averaged_data, by='iso2c')
+
+# filter by the most recent year, named here as 'current_data'
 current_data <- worldbank_data %>% 
   filter(year==2000)
 
-joined_data <- World%>%left_join(current_data, by='iso2c')
+# join 'World' dataset with worldbank dataset
+joined_data_2020 <- World%>%left_join(current_data, by='iso2c')
 
-inflation <- filter(joined_data, Indicator=='Inflation')
-unemployment <- filter(joined_data, Indicator =='Unemployment')
+# filter only for inflation and unemployment
+inflation <- filter(joined_data_2020, Indicator=='Inflation')
+unemployment <- filter(joined_data_2020, Indicator =='Unemployment')
 
-# life expectancy vs GDP per capita for every Country
-joined_data %>% 
-  filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
+```
+
+
+
+
+```{r}
+
+joined_data_2020 %>% 
   ggplot(aes(x = (gdp_cap_est), 
              y = (life_exp),
              size= pop_est,
              )) +
-  geom_point(alpha=0.1)+
+  geom_point(alpha=0.1) +
   xlim(0,90000) +
-  geom_smooth(se=F)+
-  #facet_wrap(~continent)+
-  labs(title='Life expectancy explained by GDP',
+  geom_smooth(span=1, se=F)+
+  labs(title='life expectancy compared to GDP per capita for all countries in the year 2020',
        x = 'GDP per capita',
        y = 'Life expectancy',
-       colour = 'continent')
+       )
 
-# life expectancy vs GDP per capita for each continent
-joined_data %>% 
-  filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
+```
+
+The positive relationship between life expectancy and GDP per capita can be clearly seen here. The jump in life expectancy is especially strong below the 25000$ threshold. After that the relationship starts to flatten.
+
+```{r}
+
+# life expectancy vs GDP per capita for each region defined by worldbank
+joined_data_2020 %>% 
   ggplot(aes(x = (gdp_cap_est), 
              y = (life_exp),
              size= pop_est,
-             color=continent
+             color=wb
   )) +
   geom_point(alpha = 0.1)+
-  xlim(0,65000) +
+  xlim(0,60000) +
   geom_smooth(method=lm, se=F)+
-  facet_wrap(~continent)+
-  labs(title='Life expectancy and GDP per capita',
+  facet_wrap(~wb)+
+  labs(title='Life expectancy and GDP per capita for Worldbank regions',
        x = 'GDP per capita',
        y = 'Life expectancy',
+       colour = 'regions')+
+  scale_color_tableau()
+
+
+```
+
+```{r}
+# life expectancy vs GDP per capita for each region defined by worldbank
+joined_data_2020 %>% 
+  ggplot(aes(x = (gdp_cap_est), 
+             y = (life_exp),
+             size= pop_est,
+             color=income_grp
+  )) +
+  geom_point(alpha = 0.1)+
+  xlim(0,60000) +
+  geom_smooth(method=lm, se=F)+
+  facet_wrap(~income_grp)+
+  labs(title='Life expectancy and GDP per capita divided by income level',
+       x = 'GDP per capita',
+       y = 'Life expectancy',
+       colour = 'income level')
+
+```
+
+When the relationship are observed on a income level basis, there is a strong indication that income gain greatly raises the life expectancy. One could also argue that the positive relationship between those two variables are stronger in the developing nations than in the already developed nations.
+Besides the obvious positive effect on life expectancy, we wanted to find out what other social economic effects GDP has.
+
+```{r}
+
+# HPI and GDP per capita for all countries between 2000-2020
+joined_average %>% 
+  ggplot(aes(x = log(gdp_cap_est), 
+             y = HPI,
+             size= pop_est,
+  )) +
+  geom_point(alpha = 0.1)+
+  geom_smooth(method=lm, se=T)+
+  labs(title='HPI and GDP per capita',
+       x = 'GDP per capita',
+       y = 'HPI',
        colour = 'continent')
 
 
-# Happiness vs GDP per capita for each continent
-joined_data %>% 
+
+```
+
+Background information on HPI: The happy planet index consists of human well-being and its environmental impact. It can be described as an average of subjective life satisfaction, life expectancy at birth and ecological footprint per capita. In contrast to GDP and HDI （Human development index) it takes sustainability into account. The HPI was first introduced by 2006. Well-being, as the name suggests, is defined as what is ultimately good for a single individual, it is in the self-interest of the individual. The well-being index is developed by Mayo Clinic as an anonymous tool to allow participants to assess one’s well-being on various dimensions including ‘quality of life’, ‘meaning of work’, ‘likelihood of burnout, ‘suicidal ideation’ and more.
+On the first sight there seems to be a small positive relationship between GDP per capita and HPI, meaning GDP per capita is not only a positive driver for longevity, but also general well-being and sustainability.
+
+```{r}
+# HPI and GDP per capita for each continent between 2000-2020
+joined_average %>% 
   filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
   ggplot(aes(x = log(gdp_cap_est), 
              y = HPI,
              size= pop_est,
-             color=continent
+             color=wb
   )) +
   geom_point(alpha = 0.1)+
-  facet_wrap(~continent)+
-  labs(title='Happiness and GDP per capita',
-       x = 'log (GDP per capita)',
-       y = 'Happiness Index',
-       colour = 'continent')
+  geom_smooth(method=lm, se=T)+
+  facet_wrap(~wb)+
+  labs(title='HPI and GDP per capita',
+       x = 'GDP per capita',
+       y = 'HPI',
+       colour = 'wb')+
+  scale_color_tableau()
 
 
-# Happiness vs Inequality for all countries
-joined_data %>% 
-  filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
-  ggplot(aes(x = inequality, 
-             y = HPI,
-             size= pop_est,
-             color=pop_est_dens
-  )) +
-  geom_point(alpha = 0.1)+
-  geom_smooth(method=lm, se=F)+
-  labs(title='Happiness and Inequality',
-       x = 'Inequality',
-       y = 'Happiness Index')
+```
 
-# Life Expectancy And Happiness
-joined_data %>% 
+When seperated by worldbank regions, the relationship between the two variables becomes more muddy. One could argue that there is only a weak relationship or maybe even no relationship at all.
+
+```{r}
+# Life Expectancy And HPI
+joined_average %>% 
   filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
   ggplot(aes(x = life_exp, 
              y = HPI,
@@ -399,29 +447,64 @@ joined_data %>%
   )) +
   geom_point(alpha = 0.1)+
   geom_smooth(method=lm, se=F)+
-  labs(title='Happiness and Life Expectancy',
+  labs(title='HPI and Life Expectancy',
        x = 'Life Expectancy',
-       y = 'Happiness Index')
+       y = 'HPI')
 
+```
+
+Since GDP wasn’t a clear indicator for HPI, we started looking for other possible influences. One of such is the life expectancy. The positive relationship between those two was to be expected since since HPI contains life expectancy as a factor.
+
+```{r}
+
+# HPI vs Inequality for all countries
+joined_average %>% 
+  filter(continent %in% c('Asia', 'Africa', 'Europe', 'South America', 'Oceania', 'North America')) %>% 
+  ggplot(aes(x = inequality, 
+             y = HPI,
+             size= pop_est,
+             color=pop_est_dens
+  )) +
+  geom_point(alpha = 0.1)+
+  geom_smooth(method=lm, se=F)+
+  labs(title='HPI and Inequality',
+       x = 'Inequality',
+       y = 'HPI')
+
+```
+
+Another driver for HPI seems to be inequality. A negative relationship can be observed here, meaning the more equal a society/country is, the higher the HPI.
+
+Besides GDP, we also wanted to look at inflation.
+
+```{r}
 # plotting inflation of year 2020
-ggplot(data = inflation) +
+options(repr.plot.width = 2, repr.plot.height = 8)
+joined_average %>% 
+  filter(Indicator == 'Inflation') %>% 
+  ggplot() +
   geom_sf(aes(fill=Values)) +
-  colorspace::scale_fill_continuous_sequential(palette='viridis') +
-  labs(caption= 'Inflation Map 2020')
+  colorspace::scale_fill_continuous_sequential(palette='Heat 2')+
+  labs(caption= 'Average inflation between 2000 - 2020')
+```
 
-# reshape long to wide 
-columns <- c('iso_a3', 'country', 'Indicator', 'Values', 'continent')
-filtered <- joined_data[columns] %>% 
-  st_drop_geometry()
+As one would suspect, Asia Pacific, Central/Western Europe and North America had stable inflation levels over the last 20 years. While Middle East and Eastern Europe are still doing alright, Latin America and Sub Saharan Africa are falling behind.
 
-# filtered %>% 
-#   mutate(Indicator = as.factor(Indicator))
+```{r}
+## reshape long to wide for comparison between different indicators
+#   wide_data_2020contains the indices values of 2020
+columns <- c('iso_a3', 'wb','country', 'Indicator', 'Values', 'continent', 'economy', 'income_grp')
+wide_data_2020 <- joined_data_2020[columns] %>% 
+  st_drop_geometry() %>% 
+  pivot_wider(names_from = Indicator, values_from = Values)
 
-wide_data <- filtered %>% 
-  pivot_wider(names_from = Indicator, values_from = Values) 
+#   wide_averaged contains the averaged value of various indices for the last 20 years. (2000-2020)
+wide_averaged <- joined_average[columns] %>% 
+  st_drop_geometry() %>% 
+  pivot_wider(names_from = Indicator, values_from = Values)
 
-# inflation vs interest rate
-wide_data %>% 
+# average inflation rate vs average interest rate
+wide_averaged %>% 
   ggplot(aes(y = log(Inflation), 
              x = `Interest Rate`,
              size= GDP,
@@ -429,73 +512,41 @@ wide_data %>%
   geom_point(alpha=0.3)+
   geom_smooth(method=lm, se=F)+
   #facet_wrap(~continent)+
-  labs(title='Inflation and Interest rate',
+  labs(title='2000-2020 average inflation and interest rate for all countries',
        x = 'log(Inflation)',
        y = 'Interest Rate')
 
-# inflation vs unemployment?
-western <- wide_data %>% 
-  filter(continent == 'Europe' | continent =='North America')
+```
 
-western %>% 
-  ggplot(aes(x = (Unemployment), 
-             y = (Inflation),
-             size= Population,
-  )) +
+In economic theory the main tool to fight inflation is to raise the interest rate, meaning high interest rate leads to low inflation and vice versa. Using the average interest rate and average inflation rate in the last 20 years between 2000 and 2020 for all countries, the plot strangely show a positive relationship between interest rate and inflation, which is against all economic understanding. It appears that countries which on average have high level of inflation trying to fight the inflation with high interest rate, with somewhat mixed result. One could possibly conclude that interest rate alone might not be enough to regulate inflation issue.
+
+```{r}
+wide_averaged %>%
+  ggplot(aes(y = log(Inflation), 
+             x = Unemployment,)) +
   geom_point(alpha=0.3)+
   geom_smooth(method=lm, se=F)+
-  #facet_wrap(~continent)+
-  labs(title='Inflation and unemployment',
-       x = 'Unemployment rate',
-       y = 'Inflation')
+  labs(title='averaged Inflation and Interest rate between 2000 - 2020',
+       x = 'unemployment rate',
+       y = 'log(inflation)')
 
 ```
 
-Economic indicators - GDP and GDP per capita, not only show a country’s economic performance as a whole as well as on an individual level. They are also strongly correlated with other important figures e.g., life expectancy, personal well-being and, to a lesser degree, with one's happiness. The aim of this visualization paper is to find out how the GDP of each country has developed over the years, the correlation between GDP and other indicators.
-
-![](https://raw.githubusercontent.com/Lsacy/inflation/main/life_exp_gdp.png)
-
-![](https://raw.githubusercontent.com/Lsacy/inflation/main/life_exp_gdp2.png)
-
-![](https://raw.githubusercontent.com/Lsacy/inflation/main/hdi_gdp.png)
-
-![](https://raw.githubusercontent.com/Lsacy/inflation/main/hdi_inequality.png)
-
-![](https://raw.githubusercontent.com/Lsacy/inflation/main/hdi_life_exp.png)
-
-![](https://raw.githubusercontent.com/Lsacy/inflation/main/inflation_map.png)
-
-![](https://raw.githubusercontent.com/Lsacy/inflation/main/inflation_interest.png)
-
-![](https://raw.githubusercontent.com/Lsacy/inflation/main/inflation_unemployment.png)
-
-```{r multimap, eval =FALSE, include = FALSE}
-load("worldbankindicators.RData")
-
-tmap_mode("plot")
-
-currentdata = worldbank_data%>%
-  filter(!is.na(Values))%>%
-  filter(year == 2020)%>%
-  mutate(iso_a3 = 
-           countrycode(sourcevar = .$iso2c,
-                        origin = "iso2c",
-                         destination = "iso3c"))%>%
-  filter(!is.na(iso_a3))
-  
-vars = World%>%left_join(currentdata)
-
-ggplot(vars)+
-  geom_sf(mapping=aes(fill=Values))+
-  facet_wrap(~Indicator)
-
-
-tm_shape(vars) +
-    tm_polygons("Values")+
-    tm_facets(by = "Indicator",free.scales=TRUE)
-
+```{r}
+wide_averaged %>%
+  ggplot(aes(y = log(Inflation), 
+             x = Unemployment,
+             color= income_grp,)) +
+  geom_point(alpha=0.3)+
+  geom_smooth(method=lm, se=F)+
+  facet_wrap(~income_grp)+
+  labs(title='averaged Inflation and Unemployment separted by income level',
+       x = 'unemployment',
+       y = 'log(inflation)')
 
 ```
+
+Another interesting macro economic theory is the relationship between unemployment rate and inflation, which basically argues that with full employment comes also high inflation. The data shows no clear results.
 
 ## Consumer Price Inflation in Detail
 
@@ -662,7 +713,7 @@ alt$Chart(t_long)$mark_rect()$encode(
 
 ```
 
-In this last part we will look into correlation between Price Indices between regions. When we look at the Headline Consumer Price Index we also see, what we saw above when we noticed that South Asia and Sub-Saharan Africa seem to be less correlated with the other regions. This however seems to be the case for North America as well, which we oversaw because it has generally low inflation rates. 
+In this part we will look into correlation between Price Indices between regions. When we look at the Headline Consumer Price Index we also see, what we saw above when we noticed that South Asia and Sub-Saharan Africa seem to be less correlated with the other regions. This however seems to be the case for North America as well, which we oversaw because it has generally low inflation rates. 
 North America seems to have a rather strong connection to Europe & Central Asia however. 
 
 If we next look at Core Consumer Inflation Rates Correlations we see,
@@ -745,12 +796,12 @@ alt$Chart(rss)$mark_rect()$encode(
 )$properties(width=250,height=250)$facet(alt$Facet("regions:N",title=py_none()),columns=3,title="RWTLCC between LOESS interpolated energy and food price inflation rates by region between 2006 and 2022")
 ```
 
-When we compare the results to the simple pearson correlation heatmap by region from above we get to see that the energy price in North America and South Asia are not actually weekly correlated.
+When we compare the results to the simple pearson correlation heatmap by region from earlier we get to see that the energy price in North America and South Asia are not actually weekly correlated.
 They just show changing patterns of dependency where in South Asia the Energy Price as well as the Food Price can be the leading series depnding on the point in time.
 
 In North America the energy prices tends to lead e.g. rise before the energy price. But it is shifting in how far it leads, so that the correlation without lag is positive as well as negative which means it's almost zero when the correlation is calculated without shifting.
 
-Africa is the only region that tends to have the relation ship the other way around, meaning that food prices rather lead, but only very slightly.
+Africa is the only region that tends to have the relationship the other way around, meaning that food prices rather lead, but only very slightly.
 The other regions show rather complex patterns of cross correlation.
 
 ## Conclusion
