@@ -11,7 +11,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message= FALSE, warning= FALSE)
+knitr::opts_chunk$set(echo = TRUE, message= FALSE, warning= FALSE,fig.width=12,fig.height=7)
 library(altair)
 library(reticulate)
 #reticulate::py_config()
@@ -46,7 +46,7 @@ Finally we will have a deeper look into consumer price inflation.
 To simplify the Data we will aggregate it by regions as defined by the Worldbank, which you can see below.
 We also decided to use the same color scheme for all plots, which is tableau10 which you can as well see below.
 
-```{r map,fig.width=12}
+```{r map}
 
 library(tmap)
 
@@ -239,7 +239,6 @@ library(plyr)
 groupColumns <- c("Region","year")
 dataColumns <- c("gdp")
 gdp_regions <- ddply(gdp_ready, groupColumns, function(x) colSums(x[dataColumns]))
-
 # Data for plot
 gdp_regions$Region <- factor(gdp_regions$Region,
                              level = c('Sub-Saharan Africa',
@@ -251,9 +250,7 @@ gdp_regions$Region <- factor(gdp_regions$Region,
                                        'South Asia'
                                        )
                              )
-
 gdp_tot <- sum(gdp_regions$gdp)
-
 pdat = gdp_regions %>% 
   group_by(year) %>% 
   mutate(gdp_pct = gdp/sum(gdp)) %>% 
@@ -263,19 +260,16 @@ pdat = gdp_regions %>%
   mutate(gdp_pct_cum = cumsum(gdp_pct) - 0.5*gdp_pct) %>% 
   mutate(gdp_sum_year = sum(gdp)/1e9) %>% 
   ungroup
-
-png(filename="polar_gdp_plot.png")
-ggplot(pdat, aes(x=gdp_pct_cum, y=year, fill=Region, alpha=gdp_sum_year)) +
+ggplot(pdat, aes(x=gdp_pct_cum, y=year, fill=Region)) +
   geom_tile(aes(width=gdp_pct), colour="white", size=0.3) +
   coord_polar() +
   theme_void() +
   theme(axis.text.y=element_text(angle=0, colour="grey40", size=9),
         axis.ticks.y=element_line(),
         axis.ticks.length=unit(0.1,"cm")) +
-  scale_alpha_continuous(range=c(0.5,1)) +
-  scale_color_tableau() +
-  scale_fill_tableau()
-dev.off()
+  scale_color_manual(values = c("#a87c9f", "#85b6b2", "#e49444", "#6a9f58", "#5778a4", "#d1615d", "#e7ca60")) +
+  scale_fill_manual(values = c("#a87c9f", "#85b6b2", "#e49444", "#6a9f58", "#5778a4", "#d1615d", "#e7ca60"))
+
 ```
 
 By looking at the circular plot, the shares of the individual regions can be estimated very well. In the 1960s, the GDP of the North American region was 50%, the European region had shares about 25% of the total, the other regions the remaining 25%. Over time, the share of the Northern American region in total GDP shrank to about a quarter. In the European region, there were three large jumps in GDP value during this period, with the share returning to the 1960 value. The East Asian region had a steady increase in GDP with the jump in the 1990s. The other regions had steady increases in share over the years.
@@ -808,7 +802,7 @@ The other regions show rather complex patterns of cross correlation.
 
 We tried to use RStudio Cloud in the beginning which did not work that well for us because it was too complicated and unreliable. Also we played around with shiny too try out different regional mappings which 
 was too complicated as well, as it is more sensible to stick with one regional mapping for our report. Which in this case, since we used economical data was the worldbanks regional mapping.
-All of us learnt how to use ggplot which worked well for all of us as it also has great extensions like "ggimages" and "gganimate". We also got to use the "countrycodes" R-Package which solves the common problem of country mappings for different data elegantly. One of us decided to altair for the visualisations which was a bit tedious in the beginning but turned into good results in the end.
+All of us learnt how to use ggplot which worked well for all of us as it also has great extensions like "ggimages" and "gganimate". We also got to use the "countrycodes" R-Package which solves the common problem of country mappings for different data elegantly. One of us decided to use altair for the visualisations which was a bit tedious in the beginning but turned into good results in the end.
 
 
 
