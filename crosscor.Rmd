@@ -21,15 +21,14 @@ library(altair)
 alt$data_transformers$disable_max_rows()
 ```
 
-Because of the correlation patterns observed in the group report i got motivated to look into this.
-Since i was already done with my report otherwise but i still want to show the result i will keep things short here.
+Because of the correlation patterns observed by computing the pearson correlation of the time series i got motivated to look into this in further detail.
 
 I got mostly motivated to do this when i saw several heatmaps for cross correlations, that visually appealed to me. 
 After researching them i found out how they are made here, which is also my main source:
 [https://towardsdatascience.com/four-ways-to-quantify-synchrony-between-time-series-data-b99136c4a9c9]
 I adapted the given python code to R in this document below and tried to further improve it.
 
-The target group of this visualisation is far more narrow as it uses more advanced techniques which might not be clear to the general public. It also not understandable on the first look for sure.
+The target group of this visualisation is far more narrow as it uses more advanced techniques which might not be clear to the general public. The plots are also not understandable "on the first look" and need the viewer to take some ime to make sense of it.
 
 Design decisions: Because correlation goes from -1 to 1 a diverging color scale is the best choice. I set the ranges for all plots from -1 to 1 so that the colors stay the same across all plots.
 Because it is beautiful and two colors plus a neutral color are perfect as a diverging color scale i chose to use the cm.colors scale.
